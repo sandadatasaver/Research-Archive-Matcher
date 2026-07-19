@@ -139,6 +139,9 @@ class ResearchArchiveMatcherGUI:
         close_btn.pack(side="bottom")
 
     def create_widgets(self):
+        # Initialize Status Bar Variable at the very beginning to avoid order-of-initialization errors
+        self.status_var = tk.StringVar(value="System Ready")
+        
         # Header banner frame
         header_frame = ttk.Frame(self.root, padding=15, style="TFrame")
         header_frame.pack(fill="x")
@@ -167,8 +170,7 @@ class ResearchArchiveMatcherGUI:
         self.notebook.add(self.match_tab, text=" Publication Matcher ")
         self.build_match_tab()
         
-        # Status Bar
-        self.status_var = tk.StringVar(value="System Ready")
+        # Status Bar Widget Packing
         status_bar = ttk.Label(self.root, textvariable=self.status_var, relief="sunken", anchor="w", padding=5)
         status_bar.pack(fill="x", side="bottom")
 
