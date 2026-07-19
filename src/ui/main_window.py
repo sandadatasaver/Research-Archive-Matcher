@@ -46,15 +46,15 @@ class ResearchArchiveMatcherGUI:
         self.style.configure("Header.TLabel", font=("Segoe UI", 16, "bold"), foreground="#1F4E79")
         self.style.configure("Sub.TLabel", font=("Segoe UI", 10, "italic"), foreground="#555555")
         
-        self.style.configure("TButton", font=("Segoe UI", 10, "bold"), borderwidth=1)
+        self.style.configure("TButton", font=("Segoe UI", 10, "bold"), borderwidth=1, foreground="#ffffff", background="#1F4E79")
         self.style.map("TButton",
-                       foreground=[("active", "#ffffff"), ("disabled", "#999999"), (".", "#ffffff")],
-                       background=[("active", "#153d5a"), ("disabled", "#cccccc"), (".", "#1F4E79")])
+                       foreground=[("active", "#ffffff"), ("disabled", "#999999")],
+                       background=[("active", "#153d5a"), ("disabled", "#cccccc")])
                        
-        self.style.configure("Accent.TButton", font=("Segoe UI", 10, "bold"))
+        self.style.configure("Accent.TButton", font=("Segoe UI", 10, "bold"), foreground="#ffffff", background="#2e7d32")
         self.style.map("Accent.TButton",
-                       foreground=[("active", "#ffffff"), (".", "#ffffff")],
-                       background=[("active", "#1e5a22"), (".", "#2e7d32")]) # Success green
+                       foreground=[("active", "#ffffff")],
+                       background=[("active", "#1e5a22")]) # Success green
         
         # DB initialization
         self.db_path = "index.db"
