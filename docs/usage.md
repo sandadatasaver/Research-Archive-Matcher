@@ -39,13 +39,13 @@ To share the app with Windows, macOS, or Linux users who don't have Python insta
    ```bash
    pip install pyinstaller
    ```
-2. For a clean **Desktop GUI App** (no CMD window popup) with icons and logos fully bundled inside:
+2. For a clean **Desktop GUI App** (no CMD window popup) with your custom logo and taskbar icons fully bundled:
    ```bash
-   pyinstaller --onefile --noconsole --paths=. --add-data "docs;docs" --name "RAM" ram.py
+   pyinstaller --onefile --noconsole --paths=. --add-data "docs;docs" --add-data "logo.ico;." --icon=logo.ico --name "RAM" ram.py
    ```
 3. If you want to keep the **Console window open** in the background for debugging logs:
    ```bash
-   pyinstaller --onefile --console --paths=. --add-data "docs;docs" --name "RAM" ram.py
+   pyinstaller --onefile --console --paths=. --add-data "docs;docs" --add-data "logo.ico;." --icon=logo.ico --name "RAM" ram.py
    ```
 
 ### macOS & Linux Packaging (Creating native binaries)

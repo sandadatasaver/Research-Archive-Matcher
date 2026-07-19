@@ -3,7 +3,7 @@
 
 #define MyAppName "Research Archive Matcher"
 #define MyAppVersion "1.0.0"
-#define MyAppPublisher "Sandadatasaver"
+#define MyAppPublisher "Bishop Dr. David Sanda (Sanda Apps)"
 #define MyAppURL "https://github.com/sandadatasaver/Research-Archive-Matcher"
 #define MyAppExeName "RAM.exe"
 
@@ -20,6 +20,9 @@ AppSupportURL={#MyAppURL}
 AppUpdatesURL={#MyAppURL}
 DefaultDirName={autopf}\{#MyAppName}
 DisableProgramGroupPage=yes
+SetupIconFile=logo.ico
+UninstallDisplayIcon={app}\{#MyAppExeName}
+InfoBeforeFile=installer_info.txt
 ; LicenseFile=LICENSE
 ; Remove the following line to run in administrative install mode (install for all users.)
 PrivilegesRequired=lowest
