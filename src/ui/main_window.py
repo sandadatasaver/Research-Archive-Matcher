@@ -166,7 +166,7 @@ class ResearchArchiveMatcherGUI:
         vision_frame.pack(fill="x", pady=(0, 15))
         
         vision_text = (
-            "\"This open source tool is Provided free for Students, Lecturers, "
+            "\"This open source tool is Provided for Students, Lecturers, "
             "Editors and Researchers alike 100% Free for the glory of Jesus my Saviour\""
         )
         vision_lbl = tk.Label(vision_frame, text=vision_text, font=("Segoe UI", 10, "bold", "italic"), fg="#1F4E79", bg="#fff9e6", wrap=480)
