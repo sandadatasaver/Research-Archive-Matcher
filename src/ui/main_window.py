@@ -52,8 +52,8 @@ class ResearchArchiveMatcherGUI:
     def __init__(self, root):
         self.root = root
         self.root.title("Research Archive Matcher (RAM)")
-        self.root.geometry("1000x750")
-        self.root.minimum_size = (900, 650)
+        self.root.geometry("1000x600")
+        self.root.minimum_size = (900, 500)
         
         # Configure app style
         self.style = ttk.Style()
@@ -77,13 +77,21 @@ class ResearchArchiveMatcherGUI:
                        background=[("active", "#1e5a22")]) # Success green
         
         # Set Window Taskbar and Application Icons
+        ico_path = get_resource_path("logo.ico")
         logo_path = get_resource_path("docs/logo_final.png")
-        if os.path.exists(logo_path):
+        
+        # Windows-specific native titlebar and taskbar icon
+        if sys.platform == "win32" and os.path.exists(ico_path):
+            try:
+                self.root.iconbitmap(ico_path)
+            except Exception as e:
+                print(f"ICO load error: {e}")
+        elif os.path.exists(logo_path):
             try:
                 self.icon_photo = tk.PhotoImage(file=logo_path)
                 self.root.iconphoto(False, self.icon_photo)
             except Exception as e:
-                print(f"Icon load error: {e}")
+                print(f"PNG Icon load error: {e}")
                 
         # DB initialization
         self.db_path = "index.db"

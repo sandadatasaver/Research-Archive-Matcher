@@ -1,0 +1,30 @@
+============================================================
+           Research Archive Matcher (RAM) - Setup
+============================================================
+
+"This open source tool is Provided for Students, Lecturers,
+Editors and Researchers alike 100% Free for the glory of 
+Jesus my Saviour"
+
+------------------------------------------------------------
+Developer & Publisher: Bishop Dr. David Sanda (Sanda Apps)
+Version: 1.0.0
+License: MIT Open Source License (100% Free)
+------------------------------------------------------------
+
+Research Archive Matcher (RAM) is a secure, offline-first 
+research document intelligence platform. It allows you to:
+
+  - Scan and recursively index directories of PDF papers.
+  - Automatically identify structural document types (Articles, Books, TOCs).
+  - Detect exact hash duplicates and potential title duplicates in your library.
+  - Instantly search your index offline using full-text or field queries.
+  - Align external citation lists (Excel, Word, TXT) with local PDFs.
+  - Generate customized Excel matrices, Word executive summaries, and 
+    interactive HTML browser dashboards.
+
+All parsing, NLP similarity, and matching computation are executed 
+100% locally on your computer, ensuring absolute privacy for your 
+research data.
+
+Thank you for choosing Research Archive Matcher. Click "Next" to continue.
