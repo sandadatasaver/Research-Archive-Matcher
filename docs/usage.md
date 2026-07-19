@@ -39,20 +39,20 @@ To share the app with Windows, macOS, or Linux users who don't have Python insta
    ```bash
    pip install pyinstaller
    ```
-2. For a clean **Desktop GUI App** (no CMD window popup):
+2. For a clean **Desktop GUI App** (no CMD window popup) with icons and logos fully bundled inside:
    ```bash
-   pyinstaller --onefile --noconsole --name "RAM" ram.py
+   pyinstaller --onefile --noconsole --paths=. --add-data "docs;docs" --name "RAM" ram.py
    ```
 3. If you want to keep the **Console window open** in the background for debugging logs:
    ```bash
-   pyinstaller --onefile --console --name "RAM" ram.py
+   pyinstaller --onefile --console --paths=. --add-data "docs;docs" --name "RAM" ram.py
    ```
 
 ### macOS & Linux Packaging (Creating native binaries)
 1. Install PyInstaller on your target macOS or Linux system.
-2. Run the build command:
+2. Run the build command (note the `:` path separator instead of `;` for non-Windows platforms):
    ```bash
-   pyinstaller --onefile --noconsole --name "RAM" ram.py
+   pyinstaller --onefile --noconsole --paths=. --add-data "docs:docs" --name "RAM" ram.py
    ```
 3. This creates a native binary file called `RAM` (no extension on macOS/Linux) inside the `dist/` folder which can be launched instantly by double-clicking!
 
