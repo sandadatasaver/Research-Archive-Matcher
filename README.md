@@ -21,6 +21,7 @@ Instead of spending hours manually aligning lists of publications against unstru
 
 ## ✨ Key Features
 
+* **Modern Graphical User Interface (GUI)**: Designed a clean, multi-tab window with a responsive layout. Features real-time log scrolling, an interactive index explorer table (with on-the-fly text searching), and point-and-click matching configurations.
 * **Smart Title & Metadata Extraction**: Uses PyMuPDF's font/layout parsing to identify article titles by font-size hierarchy, ignoring journal boilerplate. Corrects and falls back elegantly to standard NLP text rules.
 * **Document Structural Classifier**: Automatically categorizes files into:
   - *Research Articles*
@@ -66,10 +67,23 @@ pip install pymupdf openpyxl pandas pypdf python-docx rapidfuzz
 
 ## 📖 Quick Start Guide
 
-### 1. Initialize the Index Database
+You can run RAM in two modes: **GUI Mode** (highly recommended for desktop use) or **CLI Mode** (ideal for headless servers or automated scripts).
+
+### 🚀 Running the GUI
+To start the beautiful desktop interface, simply double-click the executable or run the script with no arguments:
+```bash
+python ram.py
+```
+*(Optionally, use: `python ram.py gui`)*
+
+---
+
+### 💻 Running the Command Line Interface (CLI)
+
+#### 1. Initialize the Index Database
 Initialize a clean local SQLite database (`index.db`):
 ```bash
-./ram.py init
+python ram.py init
 ```
 
 ### 2. Scan a PDF Directory
