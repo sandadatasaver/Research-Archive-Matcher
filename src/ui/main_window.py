@@ -60,7 +60,8 @@ class ResearchArchiveMatcherGUI:
         self.db_path = "index.db"
         self.db = Database(self.db_path)
         
-        # Build UI layout
+        # Build Menu and UI layout
+        self.create_menu()
         self.create_widgets()
         
         # Start background polling for queue-driven log updates
@@ -68,6 +69,74 @@ class ResearchArchiveMatcherGUI:
         
         # Setup logging redirection
         self.setup_logging()
+
+    def create_menu(self):
+        menubar = tk.Menu(self.root)
+        self.root.config(menu=menubar)
+        
+        # File Menu
+        file_menu = tk.Menu(menubar, tearoff=0)
+        menubar.add_cascade(label="File", menu=file_menu)
+        file_menu.add_command(label="Initialize Database", command=self.gui_init_db)
+        file_menu.add_separator()
+        file_menu.add_command(label="Exit", command=self.root.quit)
+        
+        # Help Menu
+        help_menu = tk.Menu(menubar, tearoff=0)
+        menubar.add_cascade(label="Help", menu=help_menu)
+        help_menu.add_command(label="About RAM", command=self.show_about_dialog)
+
+    def gui_init_db(self):
+        confirm = messagebox.askyesno("Initialize Database", "Are you sure you want to initialize the local SQLite index?\n\nThis will clear any existing document metadata in 'index.db' and start fresh.")
+        if confirm:
+            self.db.clear()
+            self.load_indexed_documents()
+            messagebox.showinfo("Success", "Local database index initialized successfully!")
+
+    def show_about_dialog(self):
+        about_window = tk.Toplevel(self.root)
+        about_window.title("About Research Archive Matcher")
+        about_window.geometry("500x320")
+        about_window.resizable(False, False)
+        about_window.transient(self.root)
+        about_window.grab_set()
+        
+        # Center about window relative to root
+        root_x = self.root.winfo_x()
+        root_y = self.root.winfo_y()
+        root_w = self.root.winfo_width()
+        root_h = self.root.winfo_height()
+        x = root_x + (root_w - 500) // 2
+        y = root_y + (root_h - 320) // 2
+        about_window.geometry(f"+{x}+{y}")
+        
+        frame = ttk.Frame(about_window, padding=20)
+        frame.pack(fill="both", expand=True)
+        
+        title_lbl = ttk.Label(frame, text="Research Archive Matcher (RAM)", font=("Segoe UI", 14, "bold"), foreground="#1F4E79")
+        title_lbl.pack(pady=(0, 5))
+        
+        ver_lbl = ttk.Label(frame, text="Version 1.0.0 | Open Source (MIT)", font=("Segoe UI", 9, "bold"))
+        ver_lbl.pack(pady=(0, 10))
+        
+        desc_lbl = tk.Text(frame, font=("Segoe UI", 9), wrap="word", bg="#f5f7fa", fg="#333333", height=6, bd=0, highlightthickness=0)
+        desc_lbl.insert("1.0", "An offline-first, modern desktop application designed for researchers, lecturers, and librarians. "
+                               "RAM allows you to recursively scan folders of PDFs, extract title, authors, DOI, abstract, keywords, "
+                               "and year using layout and font-size analysis, automatically check for duplicates (using SHA-256 hashes), "
+                               "and match external publication lists (from Excel, Word, or TXT) against your local index using "
+                               "high-performance fuzzy NLP similarity metrics.")
+        desc_lbl.config(state="disabled")
+        desc_lbl.pack(fill="x", pady=5)
+        
+        pub_lbl = ttk.Label(frame, text="Developer & Publisher: David Sanda (Sandadatasaver)", font=("Segoe UI", 9, "italic"))
+        pub_lbl.pack(anchor="w", pady=2)
+        
+        git_lbl = ttk.Label(frame, text="Website: https://github.com/sandadatasaver/Research-Archive-Matcher", font=("Segoe UI", 9), foreground="#1F4E79", cursor="hand2")
+        git_lbl.pack(anchor="w", pady=(0, 15))
+        
+        # Close button
+        close_btn = ttk.Button(frame, text="Close", command=about_window.destroy)
+        close_btn.pack(side="bottom")
 
     def create_widgets(self):
         # Header banner frame
