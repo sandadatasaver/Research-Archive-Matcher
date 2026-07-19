@@ -1,6 +1,17 @@
 #!/usr/bin/env python3
 import os
 import sys
+
+# Ensure the repository root is in sys.path for robust package resolution
+sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
+
+# Explicitly import tkinter at top level to ensure PyInstaller bundles all Tkinter/Tcl DLLs and libraries
+try:
+    import tkinter as tk
+    from tkinter import ttk, filedialog, messagebox
+except ImportError:
+    pass
+
 import argparse
 import logging
 from src.indexer.database import Database
@@ -271,7 +282,10 @@ def main():
             launch_gui()
             sys.exit(0)
         except Exception as e:
-            print(f"⚠️ Could not launch GUI (headless environment or tkinter missing). Showing CLI help:\n")
+            print(f"⚠️ Could not launch GUI. Error: {e}")
+            import traceback
+            traceback.print_exc()
+            print("\nShowing CLI help:\n")
             parser.print_help()
             sys.exit(1)
         
@@ -282,6 +296,8 @@ def main():
             launch_gui()
         except Exception as e:
             print(f"❌ Error: Could not launch GUI. Tkinter or display server may be unavailable: {e}")
+            import traceback
+            traceback.print_exc()
             sys.exit(1)
     elif args.command == "init":
         handle_init(args)
