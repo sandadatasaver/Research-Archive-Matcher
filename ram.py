@@ -235,6 +235,9 @@ def main():
     
     subparsers = parser.add_subparsers(title="Commands", dest="command")
     
+    # gui
+    subparsers.add_parser("gui", help="Launch the Graphical User Interface (default)")
+    
     # init
     subparsers.add_parser("init", help="Initialize or clean-start the local index database")
     
@@ -260,11 +263,27 @@ def main():
     
     args = parser.parse_args()
     
+    # Fallback to GUI if no command is specified
     if not args.command:
-        parser.print_help()
-        sys.exit(1)
+        try:
+            from src.ui.main_window import launch_gui
+            print("🚀 Launching the Graphical User Interface...")
+            launch_gui()
+            sys.exit(0)
+        except Exception as e:
+            print(f"⚠️ Could not launch GUI (headless environment or tkinter missing). Showing CLI help:\n")
+            parser.print_help()
+            sys.exit(1)
         
-    if args.command == "init":
+    if args.command == "gui":
+        try:
+            from src.ui.main_window import launch_gui
+            print("🚀 Launching the Graphical User Interface...")
+            launch_gui()
+        except Exception as e:
+            print(f"❌ Error: Could not launch GUI. Tkinter or display server may be unavailable: {e}")
+            sys.exit(1)
+    elif args.command == "init":
         handle_init(args)
     elif args.command == "scan":
         handle_scan(args)
