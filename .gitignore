@@ -8,7 +8,7 @@ venv/
 ENV/
 index.db
 test_index.db
-reports/
+/reports/
 *.xlsx
 *.docx
 *.html
