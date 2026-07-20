@@ -1,0 +1,66 @@
+# Sample instruction file for pdf_extractor.py
+# Format: filename.pdf p.X (where X is the page number, 1-indexed)
+# Lines starting with # are comments and will be ignored
+
+A57.pdf p.10
+A58.pdf p.7
+A42.pdf p.3
+A42.pdf p.3
+A14.pdf p.2
+A18.pdf p.9
+A63.pdf p.3
+A17.pdf p.9
+A39.pdf p.4
+A31.pdf p.1
+A8.pdf p.1
+A56.pdf p.1
+A26.pdf p.1
+A26.pdf p.1
+A33.pdf p.5
+A25.pdf p.2
+A50.pdf p.2
+A48.pdf p.3
+A13.pdf p.4
+A61.pdf p.4
+A51.pdf p.1
+A32.pdf p.2
+A28.pdf p.1
+A7.pdf p.1
+A28.pdf p.1
+A49.pdf p.2
+A62.pdf p.9
+A30.pdf p.1
+A43.pdf p.2
+A40.pdf p.2
+A60.pdf p.1
+A20.pdf p.2
+A1.pdf p.2
+A36.pdf p.1
+A21.pdf p.2
+A52.pdf p.1
+A2.pdf p.3
+A10.pdf p.2
+A27.pdf p.3
+A3.pdf p.2
+A37.pdf p.1
+A4.pdf p.1
+A12.pdf p.2
+A9.pdf p.2
+A34.pdf p.1
+A5.pdf p.2
+A22.pdf p2
+A11.pdf p.3
+A6.pdf p.2
+A41.pdf p.3
+A23.pdf p.2
+A43.pdf p.3
+A44.pdf p.3
+A45.pdf p.3
+A46.pdf p.3
+A45.pdf p.3
+A64.pdf p.3
+A59.pdf p.1
+A46.pdf p.3
+A53.pdf p.1
+A19.pdf p.9
+
