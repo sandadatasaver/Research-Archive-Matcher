@@ -1,0 +1,8 @@
+pymupdf
+openpyxl
+pandas
+pypdf
+python-docx
+rapidfuzz
+pillow
+pyinstaller
