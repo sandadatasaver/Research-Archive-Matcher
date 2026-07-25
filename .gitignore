@@ -15,3 +15,5 @@ test_index.db
 .pytest_cache/
 .DS_Store
 Publications.docx
+PDFs/
+Publications.docx
