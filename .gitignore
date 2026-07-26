@@ -17,3 +17,11 @@ test_index.db
 Publications.docx
 PDFs/
 Publications.docx
+
+# RAM local and generated artifacts
+Output/
+output/
+build/
+dist/
+*.spec
+*.db
