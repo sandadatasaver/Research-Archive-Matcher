@@ -8,6 +8,8 @@ from tkinter import ttk, filedialog, messagebox
 from src.indexer.database import Database
 from src.extractors.metadata import MetadataExtractor
 from src.matcher.publication_match import PublicationMatcher
+from src.readers.pdf_reader import PDFReader
+from src.search.page_search import PageSearchService
 from src.reports.excel_report import ExcelReporter
 from src.reports.word_report import WordReporter
 from src.reports.html_report import HTMLReporter
@@ -342,7 +344,7 @@ A: Yes! RAM is designed with 100% cross-platform standard libraries and works se
         logo_path = get_resource_path("docs/logo_final.png")
         if os.path.exists(logo_path):
             try:
-                self.header_logo = tk.PhotoImage(file=logo_path).subsample(8, 8)
+                self.header_logo = tk.PhotoImage(file=logo_path).subsample(24, 24)
                 logo_lbl = ttk.Label(header_frame, image=self.header_logo)
                 logo_lbl.pack(side="left", padx=(0, 15))
             except Exception:
@@ -369,8 +371,13 @@ A: Yes! RAM is designed with 100% cross-platform standard libraries and works se
         self.explore_tab = ttk.Frame(self.notebook, padding=15)
         self.notebook.add(self.explore_tab, text=" Library Explorer ")
         self.build_explore_tab()
+
+        # Tab 3: Page Full-Text Search
+        self.search_tab = ttk.Frame(self.notebook, padding=15)
+        self.notebook.add(self.search_tab, text=" Full-Text Search ")
+        self.build_fulltext_search_tab()
         
-        # Tab 3: Target Matcher
+        # Tab 4: Target Matcher
         self.match_tab = ttk.Frame(self.notebook, padding=15)
         self.notebook.add(self.match_tab, text=" Publication Matcher ")
         self.build_match_tab()
@@ -473,6 +480,100 @@ A: Yes! RAM is designed with 100% cross-platform standard libraries and works se
         # Initial load
         self.load_indexed_documents()
 
+    def build_fulltext_search_tab(self):
+        """Build the page-level full-text search tab."""
+        query_frame = ttk.LabelFrame(
+            self.search_tab,
+            text="Search PDF Page Text",
+            padding=10,
+        )
+        query_frame.pack(fill="x", pady=(0, 10))
+
+        ttk.Label(query_frame, text="Query:").pack(side="left", padx=(0, 5))
+        self.page_search_var = tk.StringVar()
+        query_entry = ttk.Entry(
+            query_frame,
+            textvariable=self.page_search_var,
+            width=48,
+        )
+        query_entry.pack(side="left", fill="x", expand=True, padx=5)
+        query_entry.bind("<Return>", lambda event: self.start_page_search())
+
+        self.page_phrase_var = tk.BooleanVar(value=False)
+        ttk.Checkbutton(
+            query_frame,
+            text="Exact phrase",
+            variable=self.page_phrase_var,
+        ).pack(side="left", padx=8)
+
+        ttk.Label(query_frame, text="Minimum score:").pack(side="left")
+        self.page_score_var = tk.IntVar(value=70)
+        ttk.Spinbox(
+            query_frame,
+            from_=0,
+            to=100,
+            textvariable=self.page_score_var,
+            width=5,
+        ).pack(side="left", padx=5)
+
+        self.page_search_button = ttk.Button(
+            query_frame,
+            text="Search",
+            command=self.start_page_search,
+        )
+        self.page_search_button.pack(side="right")
+
+        results_frame = ttk.LabelFrame(
+            self.search_tab,
+            text="Page-Level Results",
+            padding=5,
+        )
+        results_frame.pack(fill="both", expand=True)
+
+        columns = ("title", "page", "score", "match", "snippet", "path")
+        self.page_search_tree = ttk.Treeview(
+            results_frame,
+            columns=columns,
+            show="headings",
+        )
+        headings = {
+            "title": "Article",
+            "page": "Page",
+            "score": "Score",
+            "match": "Match Type",
+            "snippet": "Snippet",
+            "path": "PDF Path",
+        }
+        widths = {
+            "title": 220,
+            "page": 55,
+            "score": 70,
+            "match": 120,
+            "snippet": 430,
+            "path": 260,
+        }
+        for column in columns:
+            self.page_search_tree.heading(column, text=headings[column])
+            self.page_search_tree.column(column, width=widths[column])
+
+        scrollbar = ttk.Scrollbar(
+            results_frame,
+            command=self.page_search_tree.yview,
+        )
+        scrollbar.pack(fill="y", side="right")
+        self.page_search_tree.pack(fill="both", expand=True, side="left")
+        self.page_search_tree.config(yscrollcommand=scrollbar.set)
+        self.page_search_tree.bind(
+            "<Double-1>",
+            self.open_page_search_result,
+        )
+
+        ttk.Label(
+            self.search_tab,
+            text="Double-click a result to open its PDF. The page number is shown in the result table.",
+            style="Sub.TLabel",
+        ).pack(anchor="w", pady=(8, 0))
+
     def build_match_tab(self):
         # Target list file browser
         target_frame = ttk.LabelFrame(self.match_tab, text="1. Select Target Publication List File (Excel, Word, or TXT)", padding=10)
@@ -513,7 +614,104 @@ A: Yes! RAM is designed with 100% cross-platform standard libraries and works se
         self.run_match_btn.pack(fill="x", pady=10)
 
     # --- Button Command Handlers ---
-    
+
+    def start_page_search(self):
+        query = self.page_search_var.get().strip()
+
+        if not query:
+            messagebox.showwarning(
+                "Search",
+                "Enter a word, phrase, or sentence to search.",
+            )
+            return
+
+        if self.db.get_page_count() == 0:
+            messagebox.showwarning(
+                "Page index is empty",
+                "Run a PDF scan with the page-aware version of RAM first.",
+            )
+            return
+
+        self.page_search_button.config(state="disabled")
+        self.status_var.set("Searching PDF pages...")
+
+        thread = threading.Thread(
+            target=self.run_page_search_worker,
+            args=(query,),
+            daemon=True,
+        )
+        thread.start()
+
+    def run_page_search_worker(self, query):
+        try:
+            results = PageSearchService(self.db).search(
+                query,
+                exact_phrase=self.page_phrase_var.get(),
+                minimum_score=float(self.page_score_var.get()),
+                limit=100,
+            )
+            self.root.after(
+                0,
+                lambda: self.show_page_search_results(results),
+            )
+        except Exception as error:
+            self.root.after(
+                0,
+                lambda: messagebox.showerror(
+                    "Page Search Error",
+                    str(error),
+                ),
+            )
+        finally:
+            self.root.after(
+                0,
+                lambda: self.page_search_button.config(state="normal"),
+            )
+            self.root.after(
+                0,
+                lambda: self.status_var.set("Ready"),
+            )
+
+    def show_page_search_results(self, results):
+        for item in self.page_search_tree.get_children():
+            self.page_search_tree.delete(item)
+
+        for result in results:
+            self.page_search_tree.insert(
+                "",
+                tk.END,
+                values=(
+                    result.title,
+                    result.page_number,
+                    f"{result.score:.1f}%",
+                    result.match_type,
+                    result.snippet,
+                    result.file_path,
+                ),
+            )
+
+        self.status_var.set(f"Page matches: {len(results)} found.")
+
+    def open_page_search_result(self, _event=None):
+        selection = self.page_search_tree.selection()
+        if not selection:
+            return
+
+        values = self.page_search_tree.item(selection[0], "values")
+        file_path = values[5]
+
+        try:
+            if sys.platform == "win32":
+                os.startfile(file_path)
+            elif sys.platform == "darwin":
+                import subprocess
+                subprocess.call(["open", file_path])
+            else:
+                import subprocess
+                subprocess.call(["xdg-open", file_path])
+        except Exception as error:
+            messagebox.showerror("Open PDF Error", str(error))
+
     def browse_scan_folder(self):
         folder = filedialog.askdirectory()
         if folder:
@@ -598,7 +796,20 @@ A: Yes! RAM is designed with 100% cross-platform standard libraries and works se
                     meta = extractor.extract(online_enrich=online_enrich)
                     success = self.db.add_document(meta)
                     if success:
-                        gui_queue.put(f" ✔ [{meta['document_type']}]\n")
+                        page_reader = PDFReader(path)
+                        try:
+                            pages = page_reader.get_page_texts()
+                            stored_pages = self.db.replace_page_texts(
+                                path,
+                                pages,
+                            )
+                        finally:
+                            page_reader.close()
+
+                        gui_queue.put(
+                            f" ✔ [{meta['document_type']}] "
+                            f"({stored_pages} pages indexed)\n"
+                        )
                         indexed_count += 1
                     else:
                         gui_queue.put(" ❌ (Database Index Error)\n")

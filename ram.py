@@ -16,7 +16,9 @@ import argparse
 import logging
 from src.indexer.database import Database
 from src.extractors.metadata import MetadataExtractor
+from src.readers.pdf_reader import PDFReader
 from src.matcher.publication_match import PublicationMatcher
+from src.search.page_search import PageSearchService
 from src.reports.excel_report import ExcelReporter
 from src.reports.word_report import WordReporter
 from src.reports.html_report import HTMLReporter
@@ -94,7 +96,13 @@ def handle_scan(args):
             
             success = db.add_document(meta)
             if success:
-                print(f" ✔ [{meta['document_type']}]")
+                page_reader = PDFReader(path)
+                try:
+                    pages = page_reader.get_page_texts()
+                    db.replace_page_texts(path, pages)
+                finally:
+                    page_reader.close()
+                print(f" ✔ [{meta['document_type']}] ({len(pages)} pages)")
                 indexed_count += 1
             else:
                 print(" ❌ (DB Error)")
@@ -132,6 +140,30 @@ def handle_search(args):
         print(f"    Path:     {doc['file_path']}")
         print(f"    Doc Type: {doc['document_type']} | Pages: {doc['page_count']}")
         print("    " + "-"*60)
+
+def handle_search_text(args):
+    db = Database(args.db)
+    service = PageSearchService(db)
+    results = service.search(
+        args.query,
+        exact_phrase=args.phrase,
+        minimum_score=args.minimum_score,
+        limit=args.limit,
+    )
+
+    print(
+        f"Found {len(results)} page matches for '{args.query}'"
+    )
+    print("------------------------------------------------------------------------")
+
+    for index, result in enumerate(results, 1):
+        print(f"{index:2d}. {result.title}")
+        print(f"    Page:       {result.page_number}")
+        print(f"    Score:      {result.score}% ({result.match_type})")
+        print(f"    File:       {result.file_path}")
+        print(f"    Snippet:    {result.snippet}")
+        print("    " + "-" * 60)
+
 
 def handle_match(args):
     db = Database(args.db)
@@ -263,6 +295,31 @@ def main():
     parser_search.add_argument("--field", default="all", choices=["all", "title", "authors", "doi", "journal", "abstract", "keywords", "year"],
                                help="Field to restrict search to (default: all)")
     
+    # page-level full-text search
+    parser_search_text = subparsers.add_parser(
+        "search-text",
+        help="Search PDF page text and return page-level matches",
+    )
+    parser_search_text.add_argument("query", help="Word, phrase, or sentence to search")
+    parser_search_text.add_argument(
+        "--phrase",
+        action="store_true",
+        help="Treat the query as an exact phrase",
+    )
+    parser_search_text.add_argument(
+        "--minimum-score",
+        type=float,
+        default=0.0,
+        help="Minimum closeness score from 0 to 100",
+    )
+    parser_search_text.add_argument(
+        "--limit",
+        type=int,
+        default=100,
+        help="Maximum number of page results",
+    )
+    parser_search_text.set_defaults(func=handle_search_text)
+
     # match
     parser_match = subparsers.add_parser("match", help="Match target publications list against local index and generate reports")
     parser_match.add_argument("targets", help="File containing target publications to match (Excel, Word, or Text)")
@@ -305,6 +362,8 @@ def main():
         handle_scan(args)
     elif args.command == "search":
         handle_search(args)
+    elif args.command == "search-text":
+        handle_search_text(args)
     elif args.command == "match":
         handle_match(args)
     elif args.command == "stats":

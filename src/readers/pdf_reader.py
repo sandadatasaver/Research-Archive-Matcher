@@ -1,95 +1,130 @@
-import fitz  # PyMuPDF
-from pypdf import PdfReader as PyPdfReader
-import os
+"""Page-aware PDF reading for Research Archive Matcher."""
+
+from __future__ import annotations
+
 import logging
+import os
+
+import fitz
+from pypdf import PdfReader as PyPdfReader
+
 
 logger = logging.getLogger(__name__)
 
+
 class PDFReader:
-    """
-    A robust class to read PDF files, supporting PyMuPDF (fitz) primarily,
-    with a fallback to pypdf.
-    """
-    def __init__(self, file_path):
+    """Read PDF text and metadata with a PyMuPDF-first fallback."""
+
+    def __init__(self, file_path: str):
         self.file_path = file_path
+
         if not os.path.exists(file_path):
             raise FileNotFoundError(f"PDF file not found: {file_path}")
+
         self.doc = None
         self._load_document()
 
     def _load_document(self):
         try:
             self.doc = fitz.open(self.file_path)
-        except Exception as e:
-            logger.warning(f"PyMuPDF failed to open {self.file_path}: {e}. Trying fallback pypdf...")
+        except Exception as error:
+            logger.warning(
+                "PyMuPDF failed to open %s: %s. Trying pypdf.",
+                self.file_path,
+                error,
+            )
             try:
                 self.doc = PyPdfReader(self.file_path)
-            except Exception as e2:
-                logger.error(f"Failed to open PDF {self.file_path} with both fitz and pypdf: {e2}")
+            except Exception as fallback_error:
+                logger.error(
+                    "Failed to open %s with PyMuPDF and pypdf: %s",
+                    self.file_path,
+                    fallback_error,
+                )
                 self.doc = None
 
     @property
     def page_count(self) -> int:
-        if not self.doc:
+        if self.doc is None:
             return 0
+
         if isinstance(self.doc, fitz.Document):
             return len(self.doc)
-        elif isinstance(self.doc, PyPdfReader):
+
+        if isinstance(self.doc, PyPdfReader):
             return len(self.doc.pages)
+
         return 0
 
-    def get_text(self, max_pages=None) -> str:
-        """
-        Extract raw text from the document.
-        :param max_pages: Maximum number of pages to read (None for all).
-        """
-        if not self.doc:
-            return ""
-        
-        text_list = []
-        pages_to_read = self.page_count
-        if max_pages is not None:
-            pages_to_read = min(pages_to_read, max_pages)
+    def get_page_texts(self, max_pages: int | None = None) -> list[dict]:
+        """Extract text page by page with one-based page numbers."""
+        if self.doc is None:
+            return []
 
-        try:
-            if isinstance(self.doc, fitz.Document):
-                for page_num in range(pages_to_read):
-                    page = self.doc[page_num]
-                    text_list.append(page.get_text())
-            elif isinstance(self.doc, PyPdfReader):
-                for page_num in range(pages_to_read):
-                    page = self.doc.pages[page_num]
-                    text_list.append(page.extract_text() or "")
-        except Exception as e:
-            logger.error(f"Error extracting text from {self.file_path}: {e}")
-        
-        return "\n".join(text_list)
+        page_total = self.page_count
+        if max_pages is not None:
+            page_total = min(page_total, max_pages)
+
+        pages: list[dict] = []
+
+        for page_index in range(page_total):
+            try:
+                if isinstance(self.doc, fitz.Document):
+                    text = self.doc[page_index].get_text()
+                elif isinstance(self.doc, PyPdfReader):
+                    text = self.doc.pages[page_index].extract_text() or ""
+                else:
+                    text = ""
+            except Exception as error:
+                logger.error(
+                    "Error extracting page %s from %s: %s",
+                    page_index + 1,
+                    self.file_path,
+                    error,
+                )
+                text = ""
+
+            pages.append({"page_number": page_index + 1, "text": text})
+
+        return pages
+
+    def get_text(self, max_pages: int | None = None) -> str:
+        """Extract and concatenate page text for backward compatibility."""
+        return "\n".join(
+            page["text"]
+            for page in self.get_page_texts(max_pages=max_pages)
+        )
 
     def get_first_page_spans(self):
-        """
-        Retrieve spans with font-size metadata from the first page (only available in PyMuPDF).
-        """
+        """Return font/layout spans from the first page when available."""
         if not self.doc or not isinstance(self.doc, fitz.Document):
             return []
-        
+
         spans_info = []
+
         try:
             page = self.doc[0]
             blocks = page.get_text("dict")["blocks"]
-            for b in blocks:
-                if "lines" in b:
-                    for l in b["lines"]:
-                        for s in l["spans"]:
-                            spans_info.append({
-                                "text": s["text"],
-                                "size": s["size"],
-                                "font": s["font"],
-                                "flags": s["flags"],
-                                "color": s["color"],
-                                "bbox": s["bbox"]
-                            })
-        except Exception as e:
-            logger.debug(f"Error getting page spans: {e}")
+
+            for block in blocks:
+                if "lines" not in block:
+                    continue
+
+                for line in block["lines"]:
+                    for span in line["spans"]:
+                        spans_info.append(
+                            {
+                                "text": span["text"],
+                                "size": span["size"],
+                                "font": span["font"],
+                                "flags": span["flags"],
+                                "color": span["color"],
+                                "bbox": span["bbox"],
+                            }
+                        )
+        except Exception as error:
+            logger.debug("Error getting first-page spans: %s", error)
+
         return spans_info
 
     def close(self):
