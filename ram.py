@@ -17,6 +17,7 @@ import logging
 from src.indexer.database import Database
 from src.extractors.metadata import MetadataExtractor
 from src.readers.pdf_reader import PDFReader
+from src.ocr.tesseract_ocr import TesseractOCR, TesseractUnavailableError
 from src.matcher.publication_match import PublicationMatcher
 from src.search.page_search import PageSearchService
 from src.reports.excel_report import ExcelReporter
@@ -67,6 +68,17 @@ def handle_scan(args):
         sys.exit(1)
         
     db = Database(args.db)
+    ocr_provider = None
+
+    if args.ocr:
+        ocr_provider = TesseractOCR()
+        if not ocr_provider.available:
+            print(
+                "❌ OCR requested, but Tesseract is unavailable. "
+                "Install Tesseract and verify it with 'tesseract --version'."
+            )
+            sys.exit(1)
+        print(f"OCR enabled: Tesseract {ocr_provider.version()}")
     
     # Gather PDF paths
     pdf_files = []
@@ -98,7 +110,9 @@ def handle_scan(args):
             if success:
                 page_reader = PDFReader(path)
                 try:
-                    pages = page_reader.get_page_texts()
+                    pages = page_reader.get_page_texts(
+                        ocr_provider=ocr_provider,
+                    )
                     db.replace_page_texts(path, pages)
                 finally:
                     page_reader.close()
@@ -310,6 +324,11 @@ def main():
     parser_scan = subparsers.add_parser("scan", help="Scan a directory for PDF files and index them")
     parser_scan.add_argument("folder", help="Directory containing PDF files")
     parser_scan.add_argument("--online", action="store_true", help="Enrich metadata using online Crossref API lookup (optional)")
+    parser_scan.add_argument(
+        "--ocr",
+        action="store_true",
+        help="OCR image-only PDF pages using Tesseract",
+    )
     
     # search
     parser_search = subparsers.add_parser("search", help="Search indexed publications")

@@ -56,8 +56,13 @@ class PDFReader:
 
         return 0
 
-    def get_page_texts(self, max_pages: int | None = None) -> list[dict]:
-        """Extract text page by page with one-based page numbers."""
+    def get_page_texts(
+        self,
+        max_pages: int | None = None,
+        ocr_provider=None,
+        minimum_text_characters: int = 20,
+    ) -> list[dict]:
+        """Extract page text and optionally OCR image-only pages."""
         if self.doc is None:
             return []
 
@@ -84,7 +89,25 @@ class PDFReader:
                 )
                 text = ""
 
-            pages.append({"page_number": page_index + 1, "text": text})
+            ocr_used = False
+            if ocr_provider is not None and isinstance(self.doc, fitz.Document):
+                page = self.doc[page_index]
+                text_length = len(" ".join(text.split()))
+                has_images = bool(page.get_images(full=True))
+
+                if text_length < minimum_text_characters and has_images:
+                    ocr_text = ocr_provider.extract_page(page)
+                    if ocr_text and ocr_text.strip():
+                        text = ocr_text
+                        ocr_used = True
+
+            pages.append(
+                {
+                    "page_number": page_index + 1,
+                    "text": text,
+                    "ocr_used": ocr_used,
+                }
+            )
 
         return pages
 
