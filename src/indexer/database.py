@@ -51,6 +51,28 @@ class Database:
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_doi ON documents (doi)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_hash ON documents (file_hash)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_title ON documents (title)")
+
+        # Page-level text storage for full-text search.
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS pdf_pages (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                document_id INTEGER NOT NULL,
+                page_number INTEGER NOT NULL,
+                page_text TEXT NOT NULL,
+                UNIQUE(document_id, page_number),
+                FOREIGN KEY(document_id) REFERENCES documents(id)
+            )
+        """)
+        cursor.execute("""
+            CREATE VIRTUAL TABLE IF NOT EXISTS page_search
+            USING fts5(
+                document_id UNINDEXED,
+                page_number UNINDEXED,
+                file_path UNINDEXED,
+                title UNINDEXED,
+                page_text
+            )
+        """)
         
         conn.commit()
         conn.close()
@@ -123,6 +145,126 @@ class Database:
             return False
         finally:
             conn.close()
+
+    def replace_page_texts(self, file_path: str, pages: list[dict]) -> int:
+        """Replace the stored page text and FTS rows for one document."""
+        conn = self._get_connection()
+        cursor = conn.cursor()
+
+        try:
+            cursor.execute(
+                "SELECT id, file_path, title FROM documents WHERE file_path = ?",
+                (file_path,),
+            )
+            document = cursor.fetchone()
+
+            if document is None:
+                raise ValueError(f"Document is not indexed: {file_path}")
+
+            document_id = document["id"]
+            cursor.execute(
+                "DELETE FROM pdf_pages WHERE document_id = ?",
+                (document_id,),
+            )
+            cursor.execute(
+                "DELETE FROM page_search WHERE document_id = ?",
+                (document_id,),
+            )
+
+            for page in pages:
+                page_number = int(page["page_number"])
+                text = page.get("text", "") or ""
+                cursor.execute(
+                    """
+                    INSERT INTO pdf_pages
+                        (document_id, page_number, page_text)
+                    VALUES (?, ?, ?)
+                    """,
+                    (document_id, page_number, text),
+                )
+                cursor.execute(
+                    """
+                    INSERT INTO page_search
+                        (document_id, page_number, file_path, title, page_text)
+                    VALUES (?, ?, ?, ?, ?)
+                    """,
+                    (
+                        document_id,
+                        page_number,
+                        document["file_path"],
+                        document["title"] or "",
+                        text,
+                    ),
+                )
+
+            conn.commit()
+            return len(pages)
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
+
+    def get_page_count(self, file_path: str | None = None) -> int:
+        """Return the number of stored PDF pages."""
+        conn = self._get_connection()
+        cursor = conn.cursor()
+
+        if file_path is None:
+            cursor.execute("SELECT COUNT(*) FROM pdf_pages")
+        else:
+            cursor.execute(
+                """
+                SELECT COUNT(*)
+                FROM pdf_pages
+                JOIN documents ON documents.id = pdf_pages.document_id
+                WHERE documents.file_path = ?
+                """,
+                (file_path,),
+            )
+
+        count = cursor.fetchone()[0]
+        conn.close()
+        return count
+
+    def search_pages(
+        self,
+        query: str,
+        *,
+        exact_phrase: bool = False,
+        limit: int = 100,
+    ) -> list[dict]:
+        """Search page text using SQLite FTS5 and return snippets."""
+        if not query.strip():
+            return []
+
+        search_query = query.strip()
+        if exact_phrase:
+            search_query = '"' + search_query.replace('"', '""') + '"'
+
+        conn = self._get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute(
+            """
+            SELECT
+                page_search.document_id,
+                page_search.page_number,
+                page_search.file_path,
+                page_search.title,
+                page_search.page_text,
+                snippet(page_search, 4, '[', ']', ' … ', 32) AS snippet,
+                bm25(page_search) AS rank
+            FROM page_search
+            WHERE page_search MATCH ?
+            ORDER BY rank
+            LIMIT ?
+            """,
+            (search_query, limit),
+        )
+        results = [dict(row) for row in cursor.fetchall()]
+        conn.close()
+        return results
 
     def get_document_count(self) -> int:
         conn = self._get_connection()

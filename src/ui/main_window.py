@@ -8,9 +8,12 @@ from tkinter import ttk, filedialog, messagebox
 from src.indexer.database import Database
 from src.extractors.metadata import MetadataExtractor
 from src.matcher.publication_match import PublicationMatcher
+from src.readers.pdf_reader import PDFReader
+from src.search.page_search import PageSearchService
 from src.reports.excel_report import ExcelReporter
 from src.reports.word_report import WordReporter
 from src.reports.html_report import HTMLReporter
+from src.ui.pdf_preview import PDFPreviewWindow
 
 # Queue for thread-safe GUI updates
 gui_queue = queue.Queue()
@@ -126,6 +129,25 @@ class ResearchArchiveMatcherGUI:
         help_menu.add_separator()
         help_menu.add_command(label="About RAM", command=self.show_about_dialog)
 
+    def set_window_icon(self, window):
+        """Apply the RAM logo to child windows as well as the main window."""
+        ico_path = get_resource_path("logo.ico")
+        png_path = get_resource_path("docs/logo_final.png")
+
+        if sys.platform == "win32" and os.path.exists(ico_path):
+            try:
+                window.iconbitmap(ico_path)
+                return
+            except Exception:
+                pass
+
+        if os.path.exists(png_path):
+            try:
+                window._ram_icon = tk.PhotoImage(file=png_path)
+                window.iconphoto(False, window._ram_icon)
+            except Exception:
+                pass
+
     def gui_init_db(self):
         confirm = messagebox.askyesno("Initialize Database", "Are you sure you want to initialize the local SQLite index?\n\nThis will clear any existing document metadata in 'index.db' and start fresh.")
         if confirm:
@@ -135,200 +157,204 @@ class ResearchArchiveMatcherGUI:
 
     def show_about_dialog(self):
         about_window = tk.Toplevel(self.root)
+        self.set_window_icon(about_window)
         about_window.title("About Research Archive Matcher")
-        about_window.geometry("600x480")
+        about_window.geometry("680x600")
         about_window.resizable(False, False)
         about_window.transient(self.root)
         about_window.grab_set()
-        
-        # Center about window relative to root
-        root_x = self.root.winfo_x()
-        root_y = self.root.winfo_y()
-        root_w = self.root.winfo_width()
-        root_h = self.root.winfo_height()
-        x = root_x + (root_w - 600) // 2
-        y = root_y + (root_h - 480) // 2
-        about_window.geometry(f"+{x}+{y}")
-        
-        frame = ttk.Frame(about_window, padding=25)
+
+        frame = ttk.Frame(about_window, padding=24)
         frame.pack(fill="both", expand=True)
-        
-        # App logo at top (subsampled to fit)
+
         logo_path = get_resource_path("docs/logo_final.png")
         if os.path.exists(logo_path):
             try:
-                self.about_logo = tk.PhotoImage(file=logo_path).subsample(6, 6)
-                logo_lbl = ttk.Label(frame, image=self.about_logo)
-                logo_lbl.pack(pady=(0, 5))
+                self.about_logo = tk.PhotoImage(file=logo_path).subsample(20, 20)
+                ttk.Label(frame, image=self.about_logo).pack(pady=(0, 8))
             except Exception:
                 pass
-                
-        title_lbl = ttk.Label(frame, text="Research Archive Matcher (RAM)", font=("Segoe UI", 15, "bold"), foreground="#1F4E79")
-        title_lbl.pack(pady=(0, 2))
-        
-        ver_lbl = ttk.Label(frame, text="Version 1.0.0 | Open Source (MIT License)", font=("Segoe UI", 9, "bold"), foreground="#555555")
-        ver_lbl.pack(pady=(0, 15))
-        
-        # Prominent Vision Statement Highlight Box
-        vision_frame = tk.LabelFrame(frame, text="Our Vision", font=("Segoe UI", 9, "bold"), bg="#fff9e6", fg="#b38600", padx=15, pady=10, bd=1, relief="solid")
-        vision_frame.pack(fill="x", pady=(0, 15))
-        
-        vision_text = (
-            "\"This open source tool is Provided for Students, Lecturers, "
-            "Editors and Researchers alike 100% Free for the glory of Jesus my Saviour\""
-        )
-        vision_lbl = tk.Label(vision_frame, text=vision_text, font=("Segoe UI", 10, "bold", "italic"), fg="#1F4E79", bg="#fff9e6", wrap=480)
-        vision_lbl.pack()
-        
-        desc_lbl = tk.Text(frame, font=("Segoe UI", 9), wrap="word", bg="#f5f7fa", fg="#333333", height=4, bd=0, highlightthickness=0)
-        desc_lbl.insert("1.0", "An offline-first desktop application designed to recursively scan folders of PDFs, "
-                               "extract standard publication metadata using advanced layout and font-size analysis, "
-                               "check for files and title duplicates, and align external target reference sheets using "
-                               "fuzzy NLP similarity matching.")
-        desc_lbl.config(state="disabled")
-        desc_lbl.pack(fill="x", pady=(0, 10))
-        
-        pub_lbl = ttk.Label(frame, text="Developer & Publisher: Bishop Dr. David Sanda (Sanda Apps)", font=("Segoe UI", 9, "bold"), foreground="#1F4E79")
-        pub_lbl.pack(anchor="w", pady=2)
-        
-        git_lbl = ttk.Label(frame, text="GitHub: https://github.com/sandadatasaver/Research-Archive-Matcher", font=("Segoe UI", 9), foreground="#1F4E79", cursor="hand2")
-        git_lbl.pack(anchor="w", pady=(0, 15))
-        
-        close_btn = ttk.Button(frame, text="Close", command=about_window.destroy)
-        close_btn.pack(side="bottom")
 
-    def show_help_dialog(self):
-        help_window = tk.Toplevel(self.root)
-        help_window.title("RAM - User Guide & Navigation Help")
-        help_window.geometry("700x550")
-        help_window.transient(self.root)
-        
-        # Center window
-        root_x = self.root.winfo_x()
-        root_y = self.root.winfo_y()
-        root_w = self.root.winfo_width()
-        root_h = self.root.winfo_height()
-        x = root_x + (root_w - 700) // 2
-        y = root_y + (root_h - 550) // 2
-        help_window.geometry(f"+{x}+{y}")
-        
-        frame = ttk.Frame(help_window, padding=20)
-        frame.pack(fill="both", expand=True)
-        
-        title_lbl = ttk.Label(frame, text="User Navigation & Help Guide", font=("Segoe UI", 14, "bold"), foreground="#1F4E79")
-        title_lbl.pack(anchor="w", pady=(0, 15))
-        
-        text_area = tk.Text(frame, font=("Segoe UI", 10), wrap="word", bg="#ffffff", fg="#333333", padx=10, pady=10)
+        ttk.Label(
+            frame,
+            text="Research Archive Matcher (RAM)",
+            font=("Segoe UI", 17, "bold"),
+            foreground="#1F4E79",
+        ).pack()
+        ttk.Label(
+            frame,
+            text="Version 1.0.2 | MIT License",
+            font=("Segoe UI", 9, "bold"),
+            foreground="#555555",
+        ).pack(pady=(3, 14))
+
+        vision_frame = tk.LabelFrame(
+            frame,
+            text="Our Purpose",
+            font=("Segoe UI", 9, "bold"),
+            bg="#fff9e6",
+            fg="#b38600",
+            padx=14,
+            pady=10,
+        )
+        vision_frame.pack(fill="x", pady=(0, 14))
+        tk.Label(
+            vision_frame,
+            text=(
+                "This open source tool is Provided for Students, Lecturers, "
+                "Editors and Researchers alike 100% Free for the glory of Jesus my Saviour"
+            ),
+            font=("Segoe UI", 10, "bold", "italic"),
+            fg="#1F4E79",
+            bg="#fff9e6",
+            wraplength=580,
+            justify="center",
+        ).pack()
+
+        description = (
+            "RAM is an offline-first research document intelligence platform. "
+            "It scans PDF archives, extracts metadata and page text, stores a "
+            "local SQLite index, searches words and phrases by page, matches "
+            "external publication lists, detects duplicates, and produces Excel, "
+            "Word, and HTML reports."
+        )
+        ttk.Label(frame, text=description, wraplength=610, justify="left").pack(
+            anchor="w", pady=(0, 12)
+        )
+
+        features = (
+            "Current capabilities:\n"
+            "• Page-aware PDF full-text search\n"
+            "• Article, page, snippet, and similarity results\n"
+            "• Metadata extraction and SQLite indexing\n"
+            "• DOI and optional Crossref enrichment\n"
+            "• Exact and potential duplicate detection\n"
+            "• Excel, Word, and HTML reporting\n"
+            "• Windows, Linux, and macOS build support"
+        )
+        ttk.Label(frame, text=features, justify="left").pack(
+            anchor="w", pady=(0, 12)
+        )
+
+        ttk.Label(
+            frame,
+            text="Developed and published by Bishop David Sanda Ph.D",
+            font=("Segoe UI", 9, "bold"),
+            foreground="#1F4E79",
+        ).pack(anchor="w")
+        ttk.Label(
+            frame,
+            text="GitHub: https://github.com/sandadatasaver/Research-Archive-Matcher",
+            foreground="#1F4E79",
+        ).pack(anchor="w", pady=(2, 12))
+        ttk.Button(frame, text="Close", command=about_window.destroy).pack()
+
+    def _read_help_file(self, relative_path):
+        path = get_resource_path(relative_path)
+        try:
+            with open(path, "r", encoding="utf-8") as stream:
+                return stream.read()
+        except OSError:
+            return "Help content is not available."
+
+    def _make_help_text(self, parent, content):
+        text_area = tk.Text(
+            parent,
+            font=("Segoe UI", 10),
+            wrap="word",
+            bg="#ffffff",
+            fg="#333333",
+            padx=12,
+            pady=12,
+        )
         text_area.pack(fill="both", expand=True, side="left", padx=(0, 5))
-        
-        scrollbar = ttk.Scrollbar(frame, command=text_area.yview)
+        scrollbar = ttk.Scrollbar(parent, command=text_area.yview)
         scrollbar.pack(fill="y", side="right")
         text_area.config(yscrollcommand=scrollbar.set)
-        
-        help_content = """RESEARCH ARCHIVE MATCHER (RAM) - USER MANUAL
 
-Welcome to Research Archive Matcher! This offline-first tool helps you scan, index, and organize large folders of research PDFs, search them instantly, and match external publication list files (Excel, Word, TXT) against your local library index.
+        text_area.tag_configure(
+            "heading",
+            foreground="#1F4E79",
+            font=("Segoe UI", 13, "bold"),
+            spacing1=8,
+            spacing3=5,
+        )
+        text_area.tag_configure(
+            "subheading",
+            foreground="#1F4E79",
+            font=("Segoe UI", 11, "bold"),
+            spacing1=6,
+            spacing3=3,
+        )
+        text_area.tag_configure(
+            "question",
+            foreground="#1F4E79",
+            font=("Segoe UI", 10, "bold"),
+        )
 
-==================================================
-STEP-BY-STEP WORKFLOW
-==================================================
+        for line in content.splitlines():
+            stripped = line.strip()
+            tag = None
+            if stripped.startswith("# "):
+                line = stripped[2:]
+                tag = "heading"
+            elif stripped.startswith("## "):
+                line = stripped[3:]
+                tag = "subheading"
+            elif stripped.startswith("Q:"):
+                tag = "question"
 
-1. SCAN AND INDEX YOUR PDF LIBRARY
---------------------------------------------------
-* Navigate to the 'Library Scanner' tab.
-* Click 'Browse Folder' and select the directory on your computer containing your PDF research articles.
-* Check the 'Enrich metadata using Crossref API lookup' box if you have internet access and want to automatically query Crossref using DOIs for highly precise metadata.
-* Click 'Initialize & Start Scan'. RAM will recursively read each PDF, classify its structural document type, extract titles (using font-size calculations), authors, and DOIs, and store them securely in your local SQLite 'index.db'.
+            start_index = text_area.index("end-1c")
+            text_area.insert("end", line + "\n")
+            end_index = text_area.index("end-1c")
+            if tag:
+                text_area.tag_add(tag, start_index, end_index)
 
-2. EXPLORE AND SEARCH YOUR LIBRARY
---------------------------------------------------
-* Go to the 'Library Explorer' tab.
-* Here you will see a detailed grid representing all currently indexed papers.
-* Use the search bar to filter papers instantly. You can type keywords or select specific search columns (like Title, Authors, Year, DOI, Journal, or Document Type).
-
-3. ALIGN EXTERNAL PUBLICATION TARGETS
---------------------------------------------------
-* Go to the 'Publication Matcher' tab.
-* Under Section 1, click 'Browse File' to select your reference target file. This can be an Excel sheet (.xlsx, .xls), a Word document bibliography (.docx), or a plain text list (.txt).
-* Under Section 2, use the slider to adjust the 'Fuzzy Similarity Match Threshold' (70% is recommended. Move higher for stricter matching, or lower to allow minor text variations).
-* Under Section 3, specify the folder where you want your reports to be compiled.
-* Click 'Run Alignments & Compile Reports'. RAM will run high-performance fuzzy matching, and automatically open your deliverables folder when finished!
-
-==================================================
-TIPS & BEST PRACTICES
-==================================================
-* If you have completely identical PDF files (even with different names), RAM automatically identifies them and lists them in the duplicates sheet.
-* Re-indexing: You can run scans as many times as you like. If you add new PDFs to your folder, running a scan will append them to the existing index without duplicating records.
-"""
-        text_area.insert("1.0", help_content)
         text_area.config(state="disabled")
+        return text_area
+
+    def show_help_dialog(self, selected_tab=0):
+        help_window = tk.Toplevel(self.root)
+        self.set_window_icon(help_window)
+        help_window.title("RAM - Help and FAQ")
+        help_window.geometry("760x600")
+        help_window.transient(self.root)
+        help_window.grab_set()
+
+        frame = ttk.Frame(help_window, padding=16)
+        frame.pack(fill="both", expand=True)
+
+        logo_path = get_resource_path("docs/logo_final.png")
+        if os.path.exists(logo_path):
+            try:
+                self.help_logo = tk.PhotoImage(file=logo_path).subsample(24, 24)
+                ttk.Label(frame, image=self.help_logo).pack(pady=(0, 5))
+            except Exception:
+                pass
+
+        ttk.Label(
+            frame,
+            text="Research Archive Matcher — Help and FAQ",
+            font=("Segoe UI", 14, "bold"),
+            foreground="#1F4E79",
+        ).pack(pady=(0, 10))
+
+        notebook = ttk.Notebook(frame)
+        notebook.pack(fill="both", expand=True)
+        help_tab = ttk.Frame(notebook, padding=6)
+        faq_tab = ttk.Frame(notebook, padding=6)
+        notebook.add(help_tab, text="Quick Help")
+        notebook.add(faq_tab, text="FAQ")
+        self._make_help_text(help_tab, self._read_help_file("docs/usage.md"))
+        self._make_help_text(faq_tab, self._read_help_file("docs/faq.md"))
+        notebook.select(selected_tab)
+
+        ttk.Button(frame, text="Close", command=help_window.destroy).pack(
+            pady=(10, 0)
+        )
 
     def show_faq_dialog(self):
-        faq_window = tk.Toplevel(self.root)
-        faq_window.title("RAM - Frequently Asked Questions (FAQ)")
-        faq_window.geometry("700x550")
-        faq_window.transient(self.root)
-        
-        # Center window
-        root_x = self.root.winfo_x()
-        root_y = self.root.winfo_y()
-        root_w = self.root.winfo_width()
-        root_h = self.root.winfo_height()
-        x = root_x + (root_w - 700) // 2
-        y = root_y + (root_h - 550) // 2
-        faq_window.geometry(f"+{x}+{y}")
-        
-        frame = ttk.Frame(faq_window, padding=20)
-        frame.pack(fill="both", expand=True)
-        
-        title_lbl = ttk.Label(frame, text="Frequently Asked Questions (FAQ)", font=("Segoe UI", 14, "bold"), foreground="#1F4E79")
-        title_lbl.pack(anchor="w", pady=(0, 15))
-        
-        text_area = tk.Text(frame, font=("Segoe UI", 10), wrap="word", bg="#ffffff", fg="#333333", padx=10, pady=10)
-        text_area.pack(fill="both", expand=True, side="left", padx=(0, 5))
-        
-        scrollbar = ttk.Scrollbar(frame, command=text_area.yview)
-        scrollbar.pack(fill="y", side="right")
-        text_area.config(yscrollcommand=scrollbar.set)
-        
-        faq_content = """FREQUENTLY ASKED QUESTIONS (FAQ)
-
-Q: Does RAM require an internet connection?
-A: No! RAM is built to be 100% offline-first. All PDF text reading, title extraction, indexing, duplicate finding, and fuzzy publication matching run locally on your own computer. An internet connection is only optionally used if you check the Crossref enrichment option.
-
-Q: What metadata fields are extracted from my PDFs?
-A: RAM automatically extracts:
-   * Article Title (using font-size and styling analysis)
-   * Author List (excluding affiliations and emails)
-   * Digital Object Identifier (DOI)
-   * Journal Name
-   * Publication Year
-   * Abstract/Summary block
-   * Keywords
-   * Document Structural Type (Research Article, Book, TOC, etc.)
-
-Q: How are duplicates detected?
-A: RAM detects duplicates in two separate ways:
-   1. Exact Hash Duplicates: Matches identical files by calculating their secure SHA-256 binary hash. Even if they have different names, RAM will find them!
-   2. Potential Title Duplicates: Finds files that have highly similar or identical titles using fuzzy edit-distance string alignment.
-   These are outputted as distinct sheets inside 'duplicates.xlsx'.
-
-Q: What outputs are generated during publication matching?
-A: Once a match is executed, RAM compiles 5 distinct deliverables:
-   1. 'report.xlsx' - Detailed sheet matching each target reference to a PDF path and score.
-   2. 'unmatched.xlsx' - A list of references that could not be matched, with the closest suggestions.
-   3. 'duplicates.xlsx' - Exact and potential duplicates found inside your library folder.
-   4. 'matching_report.docx' - A clean Microsoft Word executive report suitable for printing.
-   5. 'matching_report.html' - An interactive responsive browser dashboard containing searchable, paginated tabs of matches.
-
-Q: How does fuzzy matching work?
-A: RAM computes a weighted similarity score out of 100 using C-optimized Levenshtein edit distance and token sorting algorithms (Rapidfuzz). It ranks candidates and flags alignments above your selected threshold as matches.
-
-Q: Can I run this tool on Apple Mac or Linux?
-A: Yes! RAM is designed with 100% cross-platform standard libraries and works seamlessly on Windows, macOS, and Linux.
-"""
-        text_area.insert("1.0", faq_content)
-        text_area.config(state="disabled")
+        self.show_help_dialog(selected_tab=1)
 
     def create_widgets(self):
         # Initialize Status Bar Variable at the very beginning to avoid order-of-initialization errors
@@ -342,7 +368,7 @@ A: Yes! RAM is designed with 100% cross-platform standard libraries and works se
         logo_path = get_resource_path("docs/logo_final.png")
         if os.path.exists(logo_path):
             try:
-                self.header_logo = tk.PhotoImage(file=logo_path).subsample(8, 8)
+                self.header_logo = tk.PhotoImage(file=logo_path).subsample(24, 24)
                 logo_lbl = ttk.Label(header_frame, image=self.header_logo)
                 logo_lbl.pack(side="left", padx=(0, 15))
             except Exception:
@@ -355,6 +381,20 @@ A: Yes! RAM is designed with 100% cross-platform standard libraries and works se
         title_lbl.pack(anchor="w")
         sub_lbl = ttk.Label(text_banner_frame, text="Offline Research Document Intelligence & Matching Platform", style="Sub.TLabel")
         sub_lbl.pack(anchor="w")
+
+        # Reserved header action area for About and future user preferences.
+        header_actions = ttk.Frame(header_frame, style="TFrame")
+        header_actions.pack(side="right", padx=(10, 0))
+        ttk.Button(
+            header_actions,
+            text="About",
+            command=self.show_about_dialog,
+        ).pack(side="right", padx=3)
+        ttk.Button(
+            header_actions,
+            text="Help / FAQ",
+            command=self.show_help_dialog,
+        ).pack(side="right", padx=3)
         
         # Notebook (Tabbed Interface)
         self.notebook = ttk.Notebook(self.root)
@@ -369,8 +409,13 @@ A: Yes! RAM is designed with 100% cross-platform standard libraries and works se
         self.explore_tab = ttk.Frame(self.notebook, padding=15)
         self.notebook.add(self.explore_tab, text=" Library Explorer ")
         self.build_explore_tab()
+
+        # Tab 3: Page Full-Text Search
+        self.search_tab = ttk.Frame(self.notebook, padding=15)
+        self.notebook.add(self.search_tab, text=" Full-Text Search ")
+        self.build_fulltext_search_tab()
         
-        # Tab 3: Target Matcher
+        # Tab 4: Target Matcher
         self.match_tab = ttk.Frame(self.notebook, padding=15)
         self.notebook.add(self.match_tab, text=" Publication Matcher ")
         self.build_match_tab()
@@ -473,6 +518,100 @@ A: Yes! RAM is designed with 100% cross-platform standard libraries and works se
         # Initial load
         self.load_indexed_documents()
 
+    def build_fulltext_search_tab(self):
+        """Build the page-level full-text search tab."""
+        query_frame = ttk.LabelFrame(
+            self.search_tab,
+            text="Search PDF Page Text",
+            padding=10,
+        )
+        query_frame.pack(fill="x", pady=(0, 10))
+
+        ttk.Label(query_frame, text="Query:").pack(side="left", padx=(0, 5))
+        self.page_search_var = tk.StringVar()
+        query_entry = ttk.Entry(
+            query_frame,
+            textvariable=self.page_search_var,
+            width=48,
+        )
+        query_entry.pack(side="left", fill="x", expand=True, padx=5)
+        query_entry.bind("<Return>", lambda event: self.start_page_search())
+
+        self.page_phrase_var = tk.BooleanVar(value=False)
+        ttk.Checkbutton(
+            query_frame,
+            text="Exact phrase",
+            variable=self.page_phrase_var,
+        ).pack(side="left", padx=8)
+
+        ttk.Label(query_frame, text="Minimum score:").pack(side="left")
+        self.page_score_var = tk.IntVar(value=70)
+        ttk.Spinbox(
+            query_frame,
+            from_=0,
+            to=100,
+            textvariable=self.page_score_var,
+            width=5,
+        ).pack(side="left", padx=5)
+
+        self.page_search_button = ttk.Button(
+            query_frame,
+            text="Search",
+            command=self.start_page_search,
+        )
+        self.page_search_button.pack(side="right")
+
+        results_frame = ttk.LabelFrame(
+            self.search_tab,
+            text="Page-Level Results",
+            padding=5,
+        )
+        results_frame.pack(fill="both", expand=True)
+
+        columns = ("title", "page", "score", "match", "snippet", "path")
+        self.page_search_tree = ttk.Treeview(
+            results_frame,
+            columns=columns,
+            show="headings",
+        )
+        headings = {
+            "title": "Article",
+            "page": "Page",
+            "score": "Score",
+            "match": "Match Type",
+            "snippet": "Snippet",
+            "path": "PDF Path",
+        }
+        widths = {
+            "title": 220,
+            "page": 55,
+            "score": 70,
+            "match": 120,
+            "snippet": 430,
+            "path": 260,
+        }
+        for column in columns:
+            self.page_search_tree.heading(column, text=headings[column])
+            self.page_search_tree.column(column, width=widths[column])
+
+        scrollbar = ttk.Scrollbar(
+            results_frame,
+            command=self.page_search_tree.yview,
+        )
+        scrollbar.pack(fill="y", side="right")
+        self.page_search_tree.pack(fill="both", expand=True, side="left")
+        self.page_search_tree.config(yscrollcommand=scrollbar.set)
+        self.page_search_tree.bind(
+            "<Double-1>",
+            self.open_page_search_result,
+        )
+
+        ttk.Label(
+            self.search_tab,
+            text="Double-click a result to open its PDF. The page number is shown in the result table.",
+            style="Sub.TLabel",
+        ).pack(anchor="w", pady=(8, 0))
+
     def build_match_tab(self):
         # Target list file browser
         target_frame = ttk.LabelFrame(self.match_tab, text="1. Select Target Publication List File (Excel, Word, or TXT)", padding=10)
@@ -513,7 +652,104 @@ A: Yes! RAM is designed with 100% cross-platform standard libraries and works se
         self.run_match_btn.pack(fill="x", pady=10)
 
     # --- Button Command Handlers ---
-    
+
+    def start_page_search(self):
+        query = self.page_search_var.get().strip()
+
+        if not query:
+            messagebox.showwarning(
+                "Search",
+                "Enter a word, phrase, or sentence to search.",
+            )
+            return
+
+        if self.db.get_page_count() == 0:
+            messagebox.showwarning(
+                "Page index is empty",
+                "Run a PDF scan with the page-aware version of RAM first.",
+            )
+            return
+
+        self.page_search_button.config(state="disabled")
+        self.status_var.set("Searching PDF pages...")
+
+        thread = threading.Thread(
+            target=self.run_page_search_worker,
+            args=(query,),
+            daemon=True,
+        )
+        thread.start()
+
+    def run_page_search_worker(self, query):
+        try:
+            results = PageSearchService(self.db).search(
+                query,
+                exact_phrase=self.page_phrase_var.get(),
+                minimum_score=float(self.page_score_var.get()),
+                limit=100,
+            )
+            self.root.after(
+                0,
+                lambda: self.show_page_search_results(results),
+            )
+        except Exception as error:
+            self.root.after(
+                0,
+                lambda: messagebox.showerror(
+                    "Page Search Error",
+                    str(error),
+                ),
+            )
+        finally:
+            self.root.after(
+                0,
+                lambda: self.page_search_button.config(state="normal"),
+            )
+            self.root.after(
+                0,
+                lambda: self.status_var.set("Ready"),
+            )
+
+    def show_page_search_results(self, results):
+        for item in self.page_search_tree.get_children():
+            self.page_search_tree.delete(item)
+
+        for result in results:
+            self.page_search_tree.insert(
+                "",
+                tk.END,
+                values=(
+                    result.title,
+                    result.page_number,
+                    f"{result.score:.1f}%",
+                    result.match_type,
+                    result.snippet,
+                    result.file_path,
+                ),
+            )
+
+        self.status_var.set(f"Page matches: {len(results)} found.")
+
+    def open_page_search_result(self, _event=None):
+        selection = self.page_search_tree.selection()
+        if not selection:
+            return
+
+        values = self.page_search_tree.item(selection[0], "values")
+        file_path = values[5]
+        page_number = int(values[1])
+
+        try:
+            PDFPreviewWindow(
+                self.root,
+                file_path=file_path,
+                page_number=page_number,
+                query=self.page_search_var.get().strip(),
+                exact_phrase=self.page_phrase_var.get(),
+            )
+        except Exception as error:
+            messagebox.showerror("PDF Preview Error", str(error))
+
     def browse_scan_folder(self):
         folder = filedialog.askdirectory()
         if folder:
@@ -598,7 +834,20 @@ A: Yes! RAM is designed with 100% cross-platform standard libraries and works se
                     meta = extractor.extract(online_enrich=online_enrich)
                     success = self.db.add_document(meta)
                     if success:
-                        gui_queue.put(f" ✔ [{meta['document_type']}]\n")
+                        page_reader = PDFReader(path)
+                        try:
+                            pages = page_reader.get_page_texts()
+                            stored_pages = self.db.replace_page_texts(
+                                path,
+                                pages,
+                            )
+                        finally:
+                            page_reader.close()
+
+                        gui_queue.put(
+                            f" ✔ [{meta['document_type']}] "
+                            f"({stored_pages} pages indexed)\n"
+                        )
                         indexed_count += 1
                     else:
                         gui_queue.put(" ❌ (Database Index Error)\n")

@@ -21,7 +21,7 @@ Instead of spending hours manually aligning lists of publications against unstru
 
 ## ✨ Key Features
 
-* **Modern Graphical User Interface (GUI)**: Designed a clean, multi-tab window with a responsive layout. Features real-time log scrolling, an interactive index explorer table (with on-the-fly text searching), and point-and-click matching configurations.
+* **Modern Graphical User Interface (GUI)**: Designed a clean, multi-tab window with a responsive layout. Features real-time log scrolling, an interactive index explorer table, page-aware Full-Text Search, highlighted PDF page preview, and point-and-click matching configurations.
 * **Smart Title & Metadata Extraction**: Uses PyMuPDF's font/layout parsing to identify article titles by font-size hierarchy, ignoring journal boilerplate. Corrects and falls back elegantly to standard NLP text rules.
 * **Document Structural Classifier**: Automatically categorizes files into:
   - *Research Articles*
@@ -38,6 +38,7 @@ Instead of spending hours manually aligning lists of publications against unstru
   - `duplicates.xlsx`: Dual-sheet report detailing hash and title duplicates in your folder.
   - `matching_report.docx`: Executive summary document suitable for printing or sharing.
   - `matching_report.html`: An interactive, modern, and search-friendly browser dashboard.
+* **Page-Aware Full-Text Search**: Extracts and stores text page by page, searches words, exact phrases, or multiple query words, and returns article title, page number, snippet, similarity score, and match type. Double-clicking a result opens a branded preview at the matching page with search terms highlighted.
 * **100% Offline First**: All processing runs entirely on your local machine. No data or document text is sent to external servers. If an internet connection is available, RAM can optionally enrich metadata via secure Crossref API lookups.
 
 ---
@@ -109,7 +110,18 @@ Instantly search your local indexed papers:
 ./ram.py search "Doe" --field authors
 ```
 
-### 5. Match External Publication Lists
+### 5. Search PDF page text
+
+After scanning the PDF folder with the page-aware build, search for a word, phrase, or sentence:
+
+```bash
+./ram.py search-text "PowerShell automation" --phrase
+./ram.py search-text "PowerShell automation" --minimum-score 70
+```
+
+Results include the article, page number, snippet, match type, and similarity score. In the GUI, double-click a result to open the matching page with highlighted terms.
+
+### 6. Match External Publication Lists
 Compare a target citation list (Word, Excel, or Text) against your local index and export all reports:
 ```bash
 ./ram.py match samples/target_publications.xlsx --threshold 70.0 --out-dir reports
