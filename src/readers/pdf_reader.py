@@ -61,8 +61,15 @@ class PDFReader:
         max_pages: int | None = None,
         ocr_provider=None,
         minimum_text_characters: int = 20,
+        progress_callback=None,
     ) -> list[dict]:
-        """Extract page text and optionally OCR image-only pages."""
+        """Extract page text and optionally OCR image-only pages.
+
+        When ``progress_callback`` is supplied it is called once per page with
+        a dictionary describing that page's progress. This lets the GUI report
+        OCR activity while a long scan is running. A failing callback never
+        interrupts extraction.
+        """
         if self.doc is None:
             return []
 
@@ -90,24 +97,53 @@ class PDFReader:
                 text = ""
 
             ocr_used = False
+            ocr_attempted = False
+            ocr_error = None
+
             if ocr_provider is not None and isinstance(self.doc, fitz.Document):
                 page = self.doc[page_index]
                 text_length = len(" ".join(text.split()))
                 has_images = bool(page.get_images(full=True))
 
                 if text_length < minimum_text_characters and has_images:
-                    ocr_text = ocr_provider.extract_page(page)
-                    if ocr_text and ocr_text.strip():
-                        text = ocr_text
-                        ocr_used = True
+                    ocr_attempted = True
+                    try:
+                        ocr_text = ocr_provider.extract_page(page)
+                    except Exception as error:
+                        # One unreadable page must never abort a whole scan.
+                        ocr_error = str(error)
+                        logger.error(
+                            "OCR failed on page %s of %s: %s",
+                            page_index + 1,
+                            self.file_path,
+                            error,
+                        )
+                    else:
+                        if ocr_text and ocr_text.strip():
+                            text = ocr_text
+                            ocr_used = True
 
-            pages.append(
-                {
-                    "page_number": page_index + 1,
-                    "text": text,
-                    "ocr_used": ocr_used,
-                }
-            )
+            page_record = {
+                "page_number": page_index + 1,
+                "text": text,
+                "ocr_used": ocr_used,
+            }
+            pages.append(page_record)
+
+            if progress_callback is not None:
+                try:
+                    progress_callback(
+                        {
+                            "page_number": page_index + 1,
+                            "page_total": page_total,
+                            "characters": len(" ".join(text.split())),
+                            "ocr_attempted": ocr_attempted,
+                            "ocr_used": ocr_used,
+                            "ocr_error": ocr_error,
+                        }
+                    )
+                except Exception as error:
+                    logger.debug("Progress callback failed: %s", error)
 
         return pages
 

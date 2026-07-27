@@ -12,17 +12,9 @@ import fitz
 from PIL import Image, ImageDraw, ImageTk
 from tkinter import ttk
 
-
-def get_resource_path(relative_path: str) -> str:
-    """Resolve assets in source and PyInstaller layouts."""
-    try:
-        base_path = sys._MEIPASS
-    except AttributeError:
-        base_path = os.path.dirname(
-            os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        )
-
-    return os.path.join(base_path, relative_path)
+# get_resource_path is re-exported so asset resolution has exactly one
+# implementation shared across the UI.
+from src.ui.app_icon import apply_window_icon, get_resource_path  # noqa: F401
 
 
 class PDFPreviewWindow:
@@ -54,22 +46,7 @@ class PDFPreviewWindow:
 
     def _set_window_icon(self):
         """Apply the RAM logo to the preview window."""
-        ico_path = get_resource_path("logo.ico")
-        png_path = get_resource_path("docs/logo_final.png")
-
-        if sys.platform == "win32" and os.path.exists(ico_path):
-            try:
-                self.window.iconbitmap(ico_path)
-                return
-            except Exception:
-                pass
-
-        if os.path.exists(png_path):
-            try:
-                self.preview_icon = tk.PhotoImage(file=png_path)
-                self.window.iconphoto(False, self.preview_icon)
-            except Exception:
-                pass
+        apply_window_icon(self.window)
 
     def _build_ui(self):
         toolbar = ttk.Frame(self.window, padding=8)

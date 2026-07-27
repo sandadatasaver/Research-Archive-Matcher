@@ -22,7 +22,35 @@ Double-click a result in Full-Text Search. RAM opens an internal PDF preview at 
 
 ## Can RAM search scanned PDFs?
 
-Scanned image-only PDFs require OCR before their text can be searched. OCR support is a future enhancement.
+Yes, when OCR is enabled. Tick **Enable OCR for image-only pages** on the Library Scanner tab before scanning. RAM then reads scanned pages with Tesseract and adds the recovered text to the page search index.
+
+OCR requires Tesseract to be installed. If RAM cannot find it, the checkbox is disabled and the reason is shown beside it.
+
+## When does RAM use OCR?
+
+Only where it is needed. RAM OCRs a page only when that page has almost no extractable text and does contain an image. Pages that already contain text are never re-processed, and genuinely blank pages are skipped, so a scan stays as fast as possible.
+
+Your PDF files are never modified. OCR text is written only to the local index.
+
+## Why is scanning slower with OCR enabled?
+
+OCR renders each image-only page and analyses it, which takes far longer than reading embedded text. The scan log and the OCR progress bar show which page is being processed so you can monitor a long run.
+
+## How do I install Tesseract?
+
+Install Tesseract for your operating system, then restart RAM.
+
+On Windows the usual location is:
+
+```text
+C:\Users\<you>\AppData\Local\Programs\Tesseract-OCR
+```
+
+Verify the installation from a terminal:
+
+```bash
+tesseract --version
+```
 
 ## Where is the local database?
 

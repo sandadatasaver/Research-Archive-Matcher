@@ -9,11 +9,13 @@ from src.indexer.database import Database
 from src.extractors.metadata import MetadataExtractor
 from src.matcher.publication_match import PublicationMatcher
 from src.readers.pdf_reader import PDFReader
+from src.ocr.tesseract_ocr import TesseractOCR
 from src.search.page_search import PageSearchService
 from src.reports.excel_report import ExcelReporter
 from src.reports.word_report import WordReporter
 from src.reports.html_report import HTMLReporter
 from src.ui.pdf_preview import PDFPreviewWindow
+from src.ui.app_icon import apply_window_icon
 
 # Queue for thread-safe GUI updates
 gui_queue = queue.Queue()
@@ -79,22 +81,9 @@ class ResearchArchiveMatcherGUI:
                        foreground=[("active", "#ffffff")],
                        background=[("active", "#1e5a22")]) # Success green
         
-        # Set Window Taskbar and Application Icons
-        ico_path = get_resource_path("logo.ico")
-        logo_path = get_resource_path("docs/logo_final.png")
-        
-        # Windows-specific native titlebar and taskbar icon
-        if sys.platform == "win32" and os.path.exists(ico_path):
-            try:
-                self.root.iconbitmap(ico_path)
-            except Exception as e:
-                print(f"ICO load error: {e}")
-        elif os.path.exists(logo_path):
-            try:
-                self.icon_photo = tk.PhotoImage(file=logo_path)
-                self.root.iconphoto(False, self.icon_photo)
-            except Exception as e:
-                print(f"PNG Icon load error: {e}")
+        # Set Window Taskbar and Application Icons.
+        # Windows uses the native ICO; other platforms get a safely sized PNG.
+        apply_window_icon(self.root)
                 
         # DB initialization
         self.db_path = "index.db"
@@ -131,22 +120,7 @@ class ResearchArchiveMatcherGUI:
 
     def set_window_icon(self, window):
         """Apply the RAM logo to child windows as well as the main window."""
-        ico_path = get_resource_path("logo.ico")
-        png_path = get_resource_path("docs/logo_final.png")
-
-        if sys.platform == "win32" and os.path.exists(ico_path):
-            try:
-                window.iconbitmap(ico_path)
-                return
-            except Exception:
-                pass
-
-        if os.path.exists(png_path):
-            try:
-                window._ram_icon = tk.PhotoImage(file=png_path)
-                window.iconphoto(False, window._ram_icon)
-            except Exception:
-                pass
+        apply_window_icon(window)
 
     def gui_init_db(self):
         confirm = messagebox.askyesno("Initialize Database", "Are you sure you want to initialize the local SQLite index?\n\nThis will clear any existing document metadata in 'index.db' and start fresh.")
@@ -443,6 +417,30 @@ class ResearchArchiveMatcherGUI:
         self.online_enrich_var = tk.BooleanVar(value=False)
         online_chk = ttk.Checkbutton(options_frame, text="Enrich metadata using Crossref API lookup (Online)", variable=self.online_enrich_var)
         online_chk.pack(side="left")
+
+        # OCR option row
+        ocr_frame = ttk.Frame(self.scan_tab)
+        ocr_frame.pack(fill="x", pady=(0, 5))
+
+        self.ocr_enabled_var = tk.BooleanVar(value=False)
+        self.ocr_checkbox = ttk.Checkbutton(
+            ocr_frame,
+            text="Enable OCR for image-only pages (requires Tesseract)",
+            variable=self.ocr_enabled_var,
+            command=self.on_ocr_toggle,
+        )
+        self.ocr_checkbox.pack(side="left")
+
+        self.ocr_status_var = tk.StringVar(value="")
+        self.ocr_status_label = ttk.Label(
+            ocr_frame,
+            textvariable=self.ocr_status_var,
+            style="Sub.TLabel",
+        )
+        self.ocr_status_label.pack(side="left", padx=(10, 0))
+
+        # Report Tesseract availability once, at startup.
+        self.refresh_ocr_availability()
         
         # Action Buttons
         btn_frame = ttk.Frame(self.scan_tab)
@@ -451,10 +449,27 @@ class ResearchArchiveMatcherGUI:
         self.start_scan_btn = ttk.Button(btn_frame, text="Initialize & Start Scan", command=self.start_library_scan)
         self.start_scan_btn.pack(side="left", padx=(0, 10))
         
-        # Progress Bar
+        # Progress Bar (documents)
         self.progress_var = tk.DoubleVar()
         self.progress_bar = ttk.Progressbar(self.scan_tab, variable=self.progress_var, maximum=100)
         self.progress_bar.pack(fill="x", pady=5)
+
+        # Progress Bar (OCR pages within the current document)
+        self.ocr_progress_frame = ttk.Frame(self.scan_tab)
+        self.ocr_progress_var = tk.DoubleVar()
+        self.ocr_progress_label_var = tk.StringVar(value="OCR idle")
+        ttk.Label(
+            self.ocr_progress_frame,
+            textvariable=self.ocr_progress_label_var,
+            style="Sub.TLabel",
+        ).pack(anchor="w")
+        self.ocr_progress_bar = ttk.Progressbar(
+            self.ocr_progress_frame,
+            variable=self.ocr_progress_var,
+            maximum=100,
+        )
+        self.ocr_progress_bar.pack(fill="x")
+        # The OCR bar stays hidden until an OCR-enabled scan starts.
         
         # Terminal Log Output
         log_frame = ttk.LabelFrame(self.scan_tab, text="Extraction & Scanner Logs Output", padding=5)
@@ -786,6 +801,118 @@ class ResearchArchiveMatcherGUI:
             pass
         self.root.after(100, self.poll_queue)
 
+    # --- OCR Support ---
+
+    def refresh_ocr_availability(self):
+        """Detect Tesseract and describe its status next to the checkbox."""
+        try:
+            provider = TesseractOCR()
+            self.ocr_available = provider.available
+        except Exception:
+            provider = None
+            self.ocr_available = False
+
+        if self.ocr_available:
+            try:
+                version = provider.version()
+            except Exception:
+                version = "unknown version"
+            self.ocr_status_var.set(f"Tesseract {version} detected.")
+            self.ocr_checkbox.state(["!disabled"])
+        else:
+            self.ocr_status_var.set(
+                "Tesseract not found - OCR unavailable."
+            )
+            self.ocr_enabled_var.set(False)
+            self.ocr_checkbox.state(["disabled"])
+
+        return self.ocr_available
+
+    def on_ocr_toggle(self):
+        """Warn the user about the trade-offs when OCR is switched on."""
+        if not self.ocr_enabled_var.get():
+            self.ocr_progress_label_var.set("OCR idle")
+            return
+
+        if not getattr(self, "ocr_available", False):
+            self.ocr_enabled_var.set(False)
+            messagebox.showwarning(
+                "OCR Unavailable",
+                "Tesseract OCR was not found on this computer.\n\n"
+                "Install Tesseract, then restart RAM. You can verify the "
+                "installation by running 'tesseract --version' in a "
+                "terminal.",
+            )
+            return
+
+        messagebox.showinfo(
+            "OCR Enabled",
+            "OCR will be applied only to image-only pages that contain no "
+            "extractable text.\n\n"
+            "Blank pages are skipped, your PDF files are never modified, "
+            "and scanning will take noticeably longer.",
+        )
+
+    def build_ocr_progress_callback(self, label, document_index, document_total):
+        """Create a per-page callback that reports OCR activity to the GUI."""
+        state = {"ocr_pages": 0, "failed_pages": 0, "detail_lines": 0}
+
+        def callback(progress):
+            page_number = progress["page_number"]
+            page_total = progress["page_total"] or 1
+            percent = (page_number / page_total) * 100
+
+            if progress.get("ocr_used"):
+                state["ocr_pages"] += 1
+                state["detail_lines"] += 1
+                gui_queue.put(
+                    f"\n    OCR page {page_number}/{page_total} -> "
+                    f"{progress['characters']} characters recovered"
+                )
+            elif progress.get("ocr_error"):
+                state["failed_pages"] += 1
+                state["detail_lines"] += 1
+                gui_queue.put(
+                    f"\n    OCR failed on page {page_number}/{page_total}: "
+                    f"{progress['ocr_error']}"
+                )
+            elif progress.get("ocr_attempted"):
+                state["detail_lines"] += 1
+                gui_queue.put(
+                    f"\n    OCR page {page_number}/{page_total} -> no text found"
+                )
+
+            message = (
+                f"[{document_index}/{document_total}] {label} - "
+                f"page {page_number}/{page_total} "
+                f"(OCR pages: {state['ocr_pages']})"
+            )
+            self.root.after(
+                0,
+                lambda p=percent, m=message: self.update_ocr_progress(p, m),
+            )
+
+        callback.state = state
+        return callback
+
+    def update_ocr_progress(self, percent, message):
+        """Thread-safe update of the OCR progress bar and its caption."""
+        self.ocr_progress_var.set(percent)
+        self.ocr_progress_label_var.set(message)
+
+    def show_ocr_progress(self, visible):
+        """Show or hide the OCR progress bar."""
+        if visible:
+            self.ocr_progress_frame.pack(
+                fill="x",
+                pady=(0, 5),
+                before=self.log_text.master,
+            )
+            self.ocr_progress_var.set(0)
+            self.ocr_progress_label_var.set("Preparing OCR...")
+        else:
+            self.ocr_progress_frame.pack_forget()
+
     # --- Main Workflow Threads ---
 
     def start_library_scan(self):
@@ -794,17 +921,41 @@ class ResearchArchiveMatcherGUI:
             messagebox.showerror("Error", "Please select a valid directory containing your PDF library files.")
             return
             
+        use_ocr = self.ocr_enabled_var.get()
+        ocr_provider = None
+
+        if use_ocr:
+            try:
+                ocr_provider = TesseractOCR()
+            except Exception as error:
+                messagebox.showerror("OCR Error", str(error))
+                return
+
+            if not ocr_provider.available:
+                messagebox.showerror(
+                    "OCR Unavailable",
+                    "OCR is enabled, but Tesseract could not be found.\n\n"
+                    "Install Tesseract and restart RAM, or clear the OCR "
+                    "checkbox to scan without OCR.",
+                )
+                self.refresh_ocr_availability()
+                return
+
         self.start_scan_btn.config(state="disabled")
         self.progress_var.set(0)
         self.log_text.delete("1.0", tk.END)
         self.status_var.set("Scanning PDFs folder...")
+        self.show_ocr_progress(use_ocr)
         
         # Run scanner logic in a background thread to keep GUI responsive
-        thread = threading.Thread(target=self.run_library_scan_worker, args=(folder,))
+        thread = threading.Thread(
+            target=self.run_library_scan_worker,
+            args=(folder, ocr_provider),
+        )
         thread.daemon = True
         thread.start()
 
-    def run_library_scan_worker(self, folder):
+    def run_library_scan_worker(self, folder, ocr_provider=None):
         try:
             pdf_files = []
             for root, _, files in os.walk(folder):
@@ -821,9 +972,21 @@ class ResearchArchiveMatcherGUI:
                 return
                 
             gui_queue.put(f"🔍 Discovered {total_files} PDF papers. Beginning extraction...\n")
+
+            if ocr_provider is not None:
+                try:
+                    version = ocr_provider.version()
+                except Exception:
+                    version = "unknown version"
+                gui_queue.put(
+                    f"🔤 OCR enabled (Tesseract {version}). "
+                    "Only image-only pages will be processed.\n"
+                )
             
             online_enrich = self.online_enrich_var.get()
             indexed_count = 0
+            total_ocr_pages = 0
+            total_ocr_failures = 0
             
             for i, path in enumerate(pdf_files, 1):
                 rel_path = os.path.relpath(path, folder)
@@ -835,8 +998,20 @@ class ResearchArchiveMatcherGUI:
                     success = self.db.add_document(meta)
                     if success:
                         page_reader = PDFReader(path)
+                        progress_callback = None
+
+                        if ocr_provider is not None:
+                            progress_callback = self.build_ocr_progress_callback(
+                                rel_path,
+                                i,
+                                total_files,
+                            )
+
                         try:
-                            pages = page_reader.get_page_texts()
+                            pages = page_reader.get_page_texts(
+                                ocr_provider=ocr_provider,
+                                progress_callback=progress_callback,
+                            )
                             stored_pages = self.db.replace_page_texts(
                                 path,
                                 pages,
@@ -844,10 +1019,31 @@ class ResearchArchiveMatcherGUI:
                         finally:
                             page_reader.close()
 
-                        gui_queue.put(
-                            f" ✔ [{meta['document_type']}] "
-                            f"({stored_pages} pages indexed)\n"
+                        ocr_pages = 0
+                        failed_pages = 0
+                        summary_prefix = " "
+                        if progress_callback is not None:
+                            ocr_pages = progress_callback.state["ocr_pages"]
+                            failed_pages = progress_callback.state["failed_pages"]
+                            total_ocr_pages += ocr_pages
+                            total_ocr_failures += failed_pages
+                            # Keep the summary on its own line when OCR wrote
+                            # per-page detail lines above it.
+                            if progress_callback.state["detail_lines"]:
+                                summary_prefix = "\n "
+
+                        summary = (
+                            f"{summary_prefix}✔ [{meta['document_type']}] "
+                            f"({stored_pages} pages indexed"
                         )
+                        if ocr_pages:
+                            summary += f", {ocr_pages} via OCR"
+                        if failed_pages:
+                            plural = "s" if failed_pages != 1 else ""
+                            summary += f", {failed_pages} OCR failure{plural}"
+                        summary += ")\n"
+
+                        gui_queue.put(summary)
                         indexed_count += 1
                     else:
                         gui_queue.put(" ❌ (Database Index Error)\n")
@@ -859,10 +1055,38 @@ class ResearchArchiveMatcherGUI:
                 self.root.after(0, lambda p=pct: self.progress_var.set(p))
             
             gui_queue.put(f"\n✔ Process completed! Successfully indexed {indexed_count} papers into local index.\n")
+
+            if ocr_provider is not None:
+                gui_queue.put(
+                    f"🔤 OCR summary: {total_ocr_pages} page(s) recovered "
+                    f"through OCR, {total_ocr_failures} failure(s).\n"
+                )
+                self.root.after(
+                    0,
+                    lambda: self.update_ocr_progress(
+                        100,
+                        f"OCR complete - {total_ocr_pages} page(s) recovered.",
+                    ),
+                )
             
             # Auto refresh grid
             self.root.after(0, self.load_indexed_documents)
-            self.root.after(0, lambda: messagebox.showinfo("Success", f"Scanning complete!\nSuccessfully indexed {indexed_count} documents."))
+            completion_message = (
+                f"Scanning complete!\nSuccessfully indexed "
+                f"{indexed_count} documents."
+            )
+            if ocr_provider is not None:
+                completion_message += (
+                    f"\n\nOCR recovered text from {total_ocr_pages} "
+                    f"image-only page(s)."
+                )
+                if total_ocr_failures:
+                    completion_message += (
+                        f"\n{total_ocr_failures} page(s) could not be "
+                        "processed by OCR."
+                    )
+
+            self.root.after(0, lambda m=completion_message: messagebox.showinfo("Success", m))
             
         except Exception as ex:
             gui_queue.put(f"❌ Core scan thread crashed: {ex}\n")
