@@ -88,6 +88,49 @@ class PDFReader:
 
         return pages
 
+    def analyze_pages(self, minimum_text_characters: int = 20) -> list[dict]:
+        """Identify pages with too little text and likely needing OCR."""
+        if minimum_text_characters < 0:
+            raise ValueError("minimum_text_characters cannot be negative")
+
+        analysis = []
+
+        page_texts = self.get_page_texts()
+
+        for page in page_texts:
+            text_length = len(" ".join(page["text"].split()))
+            has_images = False
+            page_index = page["page_number"] - 1
+
+            if isinstance(self.doc, fitz.Document):
+                try:
+                    has_images = bool(
+                        self.doc[page_index].get_images(full=True)
+                    )
+                except Exception as error:
+                    logger.debug(
+                        "Could not inspect images on page %s: %s",
+                        page["page_number"],
+                        error,
+                    )
+
+            is_blank = text_length == 0 and not has_images
+
+            analysis.append(
+                {
+                    "page_number": page["page_number"],
+                    "text_length": text_length,
+                    "has_images": has_images,
+                    "is_blank": is_blank,
+                    "requires_ocr": (
+                        text_length < minimum_text_characters
+                        and not is_blank
+                    ),
+                }
+            )
+
+        return analysis
+
     def get_text(self, max_pages: int | None = None) -> str:
         """Extract and concatenate page text for backward compatibility."""
         return "\n".join(

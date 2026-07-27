@@ -165,6 +165,28 @@ def handle_search_text(args):
         print("    " + "-" * 60)
 
 
+def handle_ocr_status(args):
+    reader = PDFReader(args.pdf)
+    pages = reader.analyze_pages(
+        minimum_text_characters=args.minimum_text_characters,
+    )
+    reader.close()
+
+    ocr_pages = [page for page in pages if page["requires_ocr"]]
+    blank_pages = [page for page in pages if page["is_blank"]]
+
+    print(f"PDF: {args.pdf}")
+    print(f"Pages: {len(pages)}")
+    print(f"Blank pages: {len(blank_pages)}")
+    print(f"Likely OCR pages: {len(ocr_pages)}")
+
+    for page in ocr_pages:
+        print(
+            f"  Page {page['page_number']}: "
+            f"{page['text_length']} extracted characters"
+        )
+
+
 def handle_match(args):
     db = Database(args.db)
     if db.get_document_count() == 0:
@@ -320,6 +342,20 @@ def main():
     )
     parser_search_text.set_defaults(func=handle_search_text)
 
+    # OCR diagnostics
+    parser_ocr = subparsers.add_parser(
+        "ocr-status",
+        help="Identify PDF pages that may require OCR",
+    )
+    parser_ocr.add_argument("pdf", help="PDF file to inspect")
+    parser_ocr.add_argument(
+        "--minimum-text-characters",
+        type=int,
+        default=20,
+        help="Text-length threshold for an OCR warning",
+    )
+    parser_ocr.set_defaults(func=handle_ocr_status)
+
     # match
     parser_match = subparsers.add_parser("match", help="Match target publications list against local index and generate reports")
     parser_match.add_argument("targets", help="File containing target publications to match (Excel, Word, or Text)")
@@ -364,6 +400,8 @@ def main():
         handle_search(args)
     elif args.command == "search-text":
         handle_search_text(args)
+    elif args.command == "ocr-status":
+        handle_ocr_status(args)
     elif args.command == "match":
         handle_match(args)
     elif args.command == "stats":
