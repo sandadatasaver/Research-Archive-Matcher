@@ -25,3 +25,4 @@ build/
 dist/
 *.spec
 *.db
+ocr_page_*.png
