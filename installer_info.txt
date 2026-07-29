@@ -3,28 +3,65 @@
 ============================================================
 
 "This open source tool is Provided for Students, Lecturers,
-Editors and Researchers alike 100% Free for the glory of 
+Editors and Researchers alike 100% Free for the glory of
 Jesus my Saviour"
 
 ------------------------------------------------------------
 Developer & Publisher: Bishop Dr. David Sanda (Sanda Apps)
-Version: 1.0.0
+Version: 1.2.0
 License: MIT Open Source License (100% Free)
 ------------------------------------------------------------
 
-Research Archive Matcher (RAM) is a secure, offline-first 
+Research Archive Matcher (RAM) is a secure, offline-first
 research document intelligence platform. It allows you to:
 
   - Scan and recursively index directories of PDF papers.
   - Automatically identify structural document types (Articles, Books, TOCs).
   - Detect exact hash duplicates and potential title duplicates in your library.
   - Instantly search your index offline using full-text or field queries.
+  - Search inside PDF pages, by exact phrase or by all query words,
+    with similarity scores, page numbers and text snippets.
+  - Open any result in a built-in PDF preview with your search
+    terms highlighted, and page-by-page navigation.
+  - Read scanned, image-only pages using optional OCR.
   - Align external citation lists (Excel, Word, TXT) with local PDFs.
-  - Generate customized Excel matrices, Word executive summaries, and 
+  - Generate customized Excel matrices, Word executive summaries, and
     interactive HTML browser dashboards.
 
-All parsing, NLP similarity, and matching computation are executed 
-100% locally on your computer, ensuring absolute privacy for your 
-research data.
+------------------------------------------------------------
+NEW IN THIS VERSION
+------------------------------------------------------------
+
+  - Page-aware full-text search across your entire PDF archive.
+  - Built-in PDF preview with highlighted search terms.
+  - Optional OCR for scanned, image-only pages.
+  - OCR progress reporting in the scan log.
+  - Improved window icons on Windows, Linux and macOS.
+
+------------------------------------------------------------
+OPTIONAL: OCR FOR SCANNED DOCUMENTS
+------------------------------------------------------------
+
+RAM can read scanned pages that contain no selectable text.
+This feature is optional and switched off by default.
+
+To use it, install Tesseract OCR separately:
+
+  https://github.com/UB-Mannheim/tesseract/wiki
+
+After installing, restart RAM and tick the option
+"Enable OCR for image-only pages" on the Library Scanner tab.
+
+RAM detects Tesseract automatically. If it is not installed,
+the option stays disabled and every other feature works
+normally. Only pages with no extractable text are processed,
+blank pages are skipped, and your PDF files are never modified.
+
+------------------------------------------------------------
+
+All parsing, similarity scoring, and matching computation are
+executed 100% locally on your computer, ensuring absolute
+privacy for your research data. RAM never uploads your
+documents anywhere.
 
 Thank you for choosing Research Archive Matcher. Click "Next" to continue.
