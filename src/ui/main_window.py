@@ -157,7 +157,7 @@ class ResearchArchiveMatcherGUI:
         ).pack()
         ttk.Label(
             frame,
-            text="Version 1.0.2 | MIT License",
+            text="Version 1.2.0 | MIT License",
             font=("Segoe UI", 9, "bold"),
             foreground="#555555",
         ).pack(pady=(3, 14))

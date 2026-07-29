@@ -3,7 +3,7 @@ name: Package and Release RAM
 on:
   push:
     tags:
-      - 'v*' # Triggers automatically when you push a tag starting with 'v', e.g. v1.0.0
+      - 'v*' # Triggers automatically when you push a tag starting with 'v', e.g. v1.2.0
   workflow_dispatch: # Allows manual trigger from the Actions tab on GitHub
 
 permissions:
@@ -40,18 +40,21 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install pymupdf openpyxl pandas pypdf python-docx rapidfuzz pillow pyinstaller
+          pip install pymupdf openpyxl pandas pypdf python-docx rapidfuzz pillow pytesseract pyinstaller
+
+      - name: Run test suite
+        run: python -m unittest discover -s tests -p "test*.py"
 
       - name: Build with PyInstaller (Windows)
         if: matrix.os == 'windows-latest'
         run: |
-          pyinstaller --onefile --noconsole --paths=. --add-data "docs;docs" --add-data "logo.ico;." --icon=logo.ico --name "RAM" ram.py
+          pyinstaller --onefile --noconsole --paths=. --add-data "docs;docs" --add-data "logo.ico;." --icon=logo.ico --hidden-import=pytesseract --hidden-import=PIL._tkinter_finder --name "RAM" ram.py
           powershell Compress-Archive -Path dist/RAM.exe -DestinationPath RAM_Windows.zip
 
       - name: Build with PyInstaller (macOS)
         if: matrix.os == 'macos-latest'
         run: |
-          pyinstaller --onefile --windowed --paths=. --add-data "docs:docs" --add-data "logo.ico:." --icon=logo.ico --name "RAM" ram.py
+          pyinstaller --onefile --windowed --paths=. --add-data "docs:docs" --add-data "logo.ico:." --icon=logo.ico --hidden-import=pytesseract --hidden-import=PIL._tkinter_finder --name "RAM" ram.py
           cd dist
           zip -r ../RAM_macOS.zip RAM.app
           cd ..
@@ -59,7 +62,7 @@ jobs:
       - name: Build with PyInstaller (Linux)
         if: matrix.os == 'ubuntu-latest'
         run: |
-          pyinstaller --onefile --paths=. --add-data "docs:docs" --add-data "logo.ico:." --name "RAM" ram.py
+          pyinstaller --onefile --paths=. --add-data "docs:docs" --add-data "logo.ico:." --hidden-import=pytesseract --hidden-import=PIL._tkinter_finder --name "RAM" ram.py
           tar -czf RAM_Linux.tar.gz -C dist RAM
 
       - name: Upload Artifacts
@@ -80,10 +83,57 @@ jobs:
       - name: Create Release and Upload Assets
         uses: softprops/action-gh-release@v2
         with:
+          name: Research Archive Matcher ${{ github.ref_name }}
           files: |
             **/*.zip
             **/*.tar.gz
           draft: false
           prerelease: false
+          body: |
+            ## Research Archive Matcher ${{ github.ref_name }}
+
+            Offline-first research document intelligence. Index, search and
+            match thousands of research PDFs entirely on your own computer.
+
+            ### Downloads
+
+            | Platform | File |
+            |---|---|
+            | Windows | `RAM_Windows.zip` |
+            | macOS | `RAM_macOS.zip` |
+            | Linux | `RAM_Linux.tar.gz` |
+
+            Download, extract, and run. No Python installation required.
+
+            ### What's included
+
+            - Page-level full-text search across your whole archive, by exact
+              phrase or by all query words, with similarity scores and snippets.
+            - Built-in PDF preview that opens at the matching page with your
+              search terms highlighted.
+            - Optional OCR for scanned, image-only pages, with per-page
+              progress reporting.
+            - Metadata extraction: titles, authors, DOIs, journals, years,
+              abstracts and keywords.
+            - Duplicate detection by file hash and by fuzzy title match.
+            - Publication list matching from Excel, Word or plain text.
+            - Excel, Word and HTML reports.
+
+            ### Optional OCR
+
+            To read scanned documents, install
+            [Tesseract OCR](https://github.com/UB-Mannheim/tesseract/wiki),
+            restart RAM, and tick **Enable OCR for image-only pages** on the
+            Library Scanner tab. RAM detects it automatically. Every other
+            feature works without it.
+
+            ### Privacy
+
+            All processing runs locally. Your documents are never uploaded.
+
+            ---
+
+            Free and open source under the MIT Licence.
+            Developed by Bishop Dr. David Sanda (SandaApps).
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
